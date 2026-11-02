@@ -1,0 +1,9 @@
+build/
+build-*/
+JUCE
+JUCE/
+.tools/
+dist/
+*.dmg
+*.log
+.DS_Store

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<installer-gui-script minSpecVersion="2">
+    <title>K-54 @VERSION@ · Keller54 · by Frank E.</title>
+    <welcome file="welcome.html" mime-type="text/html"/>
+    <conclusion file="conclusion.html" mime-type="text/html"/>
+    <options customize="never" require-scripts="false" hostArchitectures="arm64,x86_64"/>
+    <domains enable_anywhere="false" enable_currentUserHome="false" enable_localSystem="true"/>
+    <os-version min="11.0"/>
+    <choices-outline>
+        <line choice="default">
+            <line choice="de.keller54.k54"/>
+        </line>
+    </choices-outline>
+    <choice id="default"/>
+    <choice id="de.keller54.k54" visible="false">
+        <pkg-ref id="de.keller54.k54"/>
+    </choice>
+    <pkg-ref id="de.keller54.k54" version="@VERSION@" onConclusion="none">K54-core.pkg</pkg-ref>
+</installer-gui-script>

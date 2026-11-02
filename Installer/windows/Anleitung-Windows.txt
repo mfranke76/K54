@@ -1,0 +1,31 @@
+K-54 · Keller54 · by Frank E.  –  Windows
+=========================================
+
+INSTALLIERT
+- VST3-Plugin:  C:\Program Files\Common Files\VST3\K-54.vst3
+- K-54 App:     C:\Program Files\Keller54\K-54\K-54.exe  (Startmenue > Keller54)
+
+DAW
+- Ableton Live:   Optionen > Plug-ins > "VST3-Systemordner verwenden" an, ggf. "Erneut scannen".
+                  K-54 unter Plug-ins > Keller54.
+- Cubase:         Studio > VST-Plug-in-Manager > Aktualisieren. K-54 unter Instrumente > Keller54.
+- Bitwig:         Einstellungen > Plug-ins > Rescan. K-54 im Browser unter Keller54.
+- FL Studio:      Optionen > Plugin-Manager > Nach Plugins suchen.
+- Komplete Kontrol: Preferences > Plug-ins > Rescan.
+
+EINZELAUSGAENGE (Reiter OUTS)
+- Ableton:  neue Audiospur, "Audio From" = K-54-Spur, darunter Ausgang waehlen, Monitor "In"
+- Cubase:   im Instrument-Rack beim K-54 die Ausgaenge aktivieren
+- Bitwig:   beim K-54 bei den Ausgaengen "+" (Chains)
+
+TEMPO
+In der DAW laeuft der K-54 immer im DAW-Tempo. In der K-54 App gilt der eigene Tempo-Regler
+(oder eine externe MIDI-Clock).
+
+K-54 APP + AUDIO-INTERFACE
+Options > Audio/MIDI Settings: ASIO-Treiber deines Interfaces waehlen. Fuer den Looper-Eingang
+beim ersten Start auf "Unmute" klicken.
+
+DEINSTALLIEREN
+Windows-Einstellungen > Apps > K-54 (Keller54) > Deinstallieren.
+Eigene Presets (Dokumente\Musik\Keller54) bleiben erhalten.

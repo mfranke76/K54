@@ -1,0 +1,62 @@
+# K-54 automatisch fuer Windows und macOS bauen.
+# Start: bei jedem Push auf "main" oder per Hand (Actions > K-54 bauen > Run workflow).
+# Ergebnis: unter Actions > Lauf > "Artifacts":  K-54-Windows (Setup.exe)  und  K-54-macOS (DMG)
+# Bei einem Tag wie "v1.4.1" werden beide Installer zusaetzlich als Release veroeffentlicht.
+name: K-54 bauen
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ "v*" ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Konfigurieren (Visual Studio 2022, x64)
+        run: cmake -B build -G "Visual Studio 17 2022" -A x64 -DK54_COPY_AFTER_BUILD=OFF
+      - name: Kompilieren
+        run: cmake --build build --config Release --parallel --target K54_VST3 K54_Standalone
+      - name: Version lesen
+        id: ver
+        shell: pwsh
+        run: |
+          $v = (Select-String -Path CMakeLists.txt -Pattern 'project\(K54 VERSION ([0-9.]+)').Matches[0].Groups[1].Value
+          "version=$v" >> $env:GITHUB_OUTPUT
+      - name: Installer bauen (Inno Setup)
+        shell: pwsh
+        run: |
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /DAppVersion=${{ steps.ver.outputs.version }} "/DBuildDir=$env:GITHUB_WORKSPACE\build\K54_artefacts\Release" Installer\windows\K54.iss
+      - uses: actions/upload-artifact@v4
+        with:
+          name: K-54-Windows
+          path: dist/*.exe
+      - name: Release (bei Tag)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.exe
+
+  macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: DMG bauen
+        run: |
+          chmod +x make-installer.sh
+          sed -i '' 's/^open -R.*$//' make-installer.sh
+          ./make-installer.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: K-54-macOS
+          path: K-54-*-Installer.dmg
+      - name: Release (bei Tag)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: K-54-*-Installer.dmg

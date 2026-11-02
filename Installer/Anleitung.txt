@@ -1,0 +1,32 @@
+K-54 · Keller54 · by Frank E.
+==============================
+
+INSTALLIEREN
+1. Logic Pro und Komplete Kontrol schließen.
+2. Doppelklick auf "K-54 installieren.pkg" und den Schritten folgen
+   (am Ende wird dein Mac-Passwort abgefragt).
+
+Installiert werden:
+- Audio Unit:  /Library/Audio/Plug-Ins/Components/K-54.component
+- VST3:        /Library/Audio/Plug-Ins/VST3/K-54.vst3
+- App:         /Programme/K-54.app
+
+LOGIC PRO
+Neue Software-Instrument-Spur > AU-Instrumente > Keller54 > K-54
+
+KOMPLETE KONTROL (A61)
+Preferences > Plug-ins > Rescan, dann K-54 laden.
+Reglerseite 1: Cutoff, Emphasis, Contour, Drive, Attack, Decay, Release, Glide.
+
+LOOPER
+Reiter LOOPER oben links. REC startet am nächsten Taktanfang,
+synchron zu Logic, zur MIDI-Clock oder zum internen Takt.
+
+DEINSTALLIEREN
+Doppelklick auf "K-54 deinstallieren.command".
+
+HINWEIS
+Weil K-54 nicht bei Apple registriert ist: Falls macOS beim Öffnen meldet,
+der Entwickler sei nicht verifiziert, mit Rechtsklick (Ctrl-Klick) auf die
+Datei > "Öffnen" bestätigen, oder unter Systemeinstellungen >
+Datenschutz & Sicherheit > "Trotzdem öffnen".
