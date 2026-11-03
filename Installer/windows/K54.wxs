@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  K-54 · Keller54 · by Frank E. – Windows-Installer als MSI (WiX Toolset v5)
+  Gebaut von build-windows.ps1:
+    wix build K54.wxs -ext WixToolset.UI.wixext -culture de-DE -d Version=1.4.1 -d BuildDir=C:\K54-build\K54_artefacts\Release -o K-54-1.4.1.msi
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+
+  <Package Name="K-54"
+           Manufacturer="Keller54 · by Frank E."
+           Version="$(var.Version)"
+           UpgradeCode="a4838810-92e0-472c-aab6-00ce1cae3863"
+           Language="1031"
+           Codepage="1252"
+           Scope="perMachine"
+           Compressed="yes">
+
+    <SummaryInformation Description="K-54 Ladder-Synthesizer mit Looper, Drum-Computer und Step-Sequencer" />
+
+    <MajorUpgrade DowngradeErrorMessage="Eine neuere Version von K-54 ist bereits installiert." />
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+
+    <Property Id="ARPURLINFOABOUT" Value="https://keller54.de" />
+    <Property Id="ARPHELPLINK" Value="https://keller54.de/k54/" />
+    <Property Id="ARPCOMMENTS" Value="Keller54 · by Frank E." />
+
+    <WixVariable Id="WixUILicenseRtf" Value="$(sys.SOURCEFILEDIR)License.rtf" />
+    <ui:WixUI Id="WixUI_FeatureTree" />
+
+    <Feature Id="VST3" Title="VST3-Plugin"
+             Description="Für Ableton, Cubase, Bitwig, FL Studio, Komplete Kontrol …"
+             Level="1" AllowAbsent="no">
+      <ComponentGroupRef Id="VST3Files" />
+    </Feature>
+
+    <Feature Id="App" Title="K-54 App"
+             Description="Den K-54 ohne DAW spielen (Standalone)."
+             Level="1">
+      <ComponentGroupRef Id="AppFiles" />
+    </Feature>
+
+    <!-- C:\Program Files\Common Files\VST3\K-54.vst3 -->
+    <StandardDirectory Id="CommonFiles64Folder">
+      <Directory Id="VST3DIR" Name="VST3">
+        <Directory Id="K54VST3DIR" Name="K-54.vst3" />
+      </Directory>
+    </StandardDirectory>
+
+    <!-- C:\Program Files\Keller54\K-54 -->
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="KELLER54DIR" Name="Keller54">
+        <Directory Id="INSTALLFOLDER" Name="K-54" />
+      </Directory>
+    </StandardDirectory>
+
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="MENUDIR" Name="Keller54" />
+    </StandardDirectory>
+
+    <ComponentGroup Id="VST3Files" Directory="K54VST3DIR">
+      <Files Include="$(var.BuildDir)\VST3\K-54.vst3\**" />
+    </ComponentGroup>
+
+    <ComponentGroup Id="AppFiles" Directory="INSTALLFOLDER">
+      <Component Id="AppExe">
+        <File Id="K54Exe" Source="$(var.BuildDir)\Standalone\K-54.exe" KeyPath="yes" />
+      </Component>
+      <Component Id="AppDoc">
+        <File Id="K54Doc" Source="$(sys.SOURCEFILEDIR)Anleitung-Windows.txt" KeyPath="yes" />
+      </Component>
+      <Component Id="MenuShortcuts" Directory="MENUDIR">
+        <Shortcut Id="AppShortcut" Name="K-54" Target="[INSTALLFOLDER]K-54.exe" WorkingDirectory="INSTALLFOLDER" />
+        <Shortcut Id="DocShortcut" Name="K-54 Anleitung" Target="[INSTALLFOLDER]Anleitung-Windows.txt" />
+        <RemoveFolder Id="RemoveMenuDir" On="uninstall" />
+        <RegistryValue Root="HKLM" Key="Software\Keller54\K-54" Name="Version" Type="string" Value="$(var.Version)" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+  </Package>
+</Wix>
