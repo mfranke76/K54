@@ -109,7 +109,12 @@ chmod +x "$DMGDIR/K-54 deinstallieren.command"
 # ---------- DMG
 echo "==> DMG erstellen"
 rm -f "$DMG"
-hdiutil create -volname "K-54 $VERSION" -srcfolder "$DMGDIR" -ov -format UDZO "$DMG" >/dev/null
+# hdiutil meldet auf manchen Rechnern kurz "Resource busy" - dann nochmal versuchen
+for try in 1 2 3 4 5; do
+  if hdiutil create -volname "K-54 $VERSION" -srcfolder "$DMGDIR" -ov -format UDZO "$DMG" >/dev/null; then break; fi
+  [ "$try" = 5 ] && { echo "DMG konnte nicht erstellt werden"; exit 1; }
+  echo "hdiutil beschaeftigt - neuer Versuch in 10 s"; sleep 10
+done
 
 echo ""
 echo "Fertig:  $DMG"
