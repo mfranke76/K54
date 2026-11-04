@@ -286,8 +286,8 @@ private:
         if (token.isEmpty())      { set (Phase::Error, "Bitte zuerst anmelden."); return; }
         if (! s.fileAvailable)    { set (Phase::Error, "Auf keller54.de ist noch kein Installer hinterlegt."); return; }
        #if JUCE_WINDOWS
-        // Windows braucht einen .exe-Installer; liefert der Server (noch) keinen, die Download-Seite oeffnen
-        if (! fileName.endsWithIgnoreCase (".exe"))
+        // Windows braucht einen .msi- oder .exe-Installer; liefert der Server (noch) keinen, die Download-Seite oeffnen
+        if (! (fileName.endsWithIgnoreCase (".exe") || fileName.endsWithIgnoreCase (".msi")))
         {
             const auto page = accountPage();
             juce::MessageManager::callAsync ([page] { juce::URL (page).launchInDefaultBrowser(); });
@@ -310,7 +310,7 @@ private:
                         .withConnectionTimeoutMs (15000)
                         .withNumRedirectsToFollow (3)
                         .withStatusCode (&code);
-        auto in = juce::URL (server + "/wp-json/k54/v1/download").createInputStream (opts);
+        auto in = juce::URL (server + "/wp-json/k54/v1/download?platform=" + platformName()).createInputStream (opts);
         if (in == nullptr || code != 200)
         {
             if (code == 401)
@@ -387,7 +387,7 @@ private:
         }
        #endif
        #if JUCE_WINDOWS
-        if (dmg.startAsProcess())   // Setup.exe starten (fragt selbst nach Admin-Rechten)
+        if (dmg.startAsProcess())   // MSI / Setup.exe starten (fragt selbst nach Admin-Rechten)
         {
             set (Phase::Done, "Setup gestartet. Bitte die DAW schliessen, installieren und neu starten.");
             return;

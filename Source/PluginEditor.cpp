@@ -391,7 +391,7 @@ void K54Editor::paint (juce::Graphics& g)
         g.setFont (K54Fonts::make (K54Fonts::syncopate(), 8.5f, 0.35f));
         g.setColour (creamDim.withAlpha (0.65f));
         g.drawText (juce::CharPointer_UTF8 ("KELLER54  \xc2\xb7  RECORDING \xc2\xb7 MIXING \xc2\xb7 PRODUCING"), f, juce::Justification::centredLeft);
-        g.drawText (juce::CharPointer_UTF8 ("K-54 V1.4.1  \xc2\xb7  SOUND DESIGN FRANK E."), f, juce::Justification::centredRight);
+        g.drawText (juce::String ("K-54 V") + JucePlugin_VersionString + juce::String (juce::CharPointer_UTF8 ("  \xc2\xb7  SOUND DESIGN FRANK E.")), f, juce::Justification::centredRight);
     }
 }
 

@@ -9,7 +9,7 @@ endif()
 # Windows: Laufzeitbibliothek statisch einbinden (kein extra "Visual C++ Redistributable" noetig)
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
-project(K54 VERSION 1.4.1 LANGUAGES C CXX)
+project(K54 VERSION 1.5.1 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
