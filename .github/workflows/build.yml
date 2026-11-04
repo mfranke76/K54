@@ -1,7 +1,8 @@
 # K-54 automatisch fuer Windows und macOS bauen.
 # Start: bei jedem Push auf "main" oder per Hand (Actions > K-54 bauen > Run workflow).
 # Ergebnis: unter Actions > Lauf > "Artifacts":  K-54-Windows (MSI + Setup.exe)  und  K-54-macOS (DMG)
-# Bei einem Tag wie "v1.4.1" werden beide Installer zusaetzlich als Release veroeffentlicht.
+# Jeder Push auf main veroeffentlicht die Installer als GitHub-Release "v<Version aus CMakeLists.txt>".
+# keller54.de holt sie von dort (K-54 Updates > Von GitHub holen).
 name: K-54 bauen
 
 on:
@@ -47,10 +48,13 @@ jobs:
           path: |
             dist/*.msi
             dist/*.exe
-      - name: Release (bei Tag)
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: v${{ steps.ver.outputs.version }}
+          name: K-54 ${{ steps.ver.outputs.version }}
+          target_commitish: ${{ github.sha }}
+          body_path: RELEASE_NOTES.md
           files: |
             dist/*.msi
             dist/*.exe
@@ -68,8 +72,14 @@ jobs:
         with:
           name: K-54-macOS
           path: K-54-*-Installer.dmg
-      - name: Release (bei Tag)
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Version lesen
+        id: ver
+        run: echo "version=$(sed -nE 's/^project\(K54 VERSION ([0-9.]+).*/\1/p' CMakeLists.txt)" >> "$GITHUB_OUTPUT"
+      - name: Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: v${{ steps.ver.outputs.version }}
+          name: K-54 ${{ steps.ver.outputs.version }}
+          target_commitish: ${{ github.sha }}
+          body_path: RELEASE_NOTES.md
           files: K-54-*-Installer.dmg
