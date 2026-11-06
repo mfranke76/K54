@@ -1,4 +1,4 @@
-K-54 S · Keller54 · by Frank E.
+K-54 S · Keller54 · by Frank E. – BETA
 
 Erste Version des K-54 S – Analog-, Wavetable- und Sample-Synthesizer:
 - Oszillatoren: Dreieck / Säge / Rechteck / Puls / Wavetable / Sample / Piano (Konzertflügel)
