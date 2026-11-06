@@ -1,0 +1,58 @@
+K-54 S · Keller54 · by Frank E.
+==============================
+
+INSTALLIEREN
+1. Logic Pro und Komplete Kontrol schließen.
+2. Doppelklick auf "K-54 S installieren.pkg" und den Schritten folgen
+   (am Ende wird dein Mac-Passwort abgefragt).
+
+Installiert werden:
+- Audio Unit:  /Library/Audio/Plug-Ins/Components/K-54 S.component
+- VST3:        /Library/Audio/Plug-Ins/VST3/K-54 S.vst3
+- App:         /Programme/K-54 S.app
+
+LOGIC PRO
+Neue Software-Instrument-Spur > AU-Instrumente > Keller54 > K-54 S
+
+KOMPLETE KONTROL (A61)
+Preferences > Plug-ins > Rescan, dann K-54 S laden.
+Reglerseite 1: Cutoff, Emphasis, Contour, Drive, Attack, Decay, Release, Glide.
+
+SAMPLES
+Reiter SAMPLE: Datei laden oder aus Finder/DAW hineinziehen,
+oder mit REC vom Audio-Eingang aufnehmen (Mikrofon/Interface).
+In Logic den Eingang oben im Plug-in-Fenster unter "Sidechain" wählen.
+Aufnahmen landen in ~/Music/Keller54/K-54 S Samples.
+Dann auf der SYNTH-Seite bei einem Oszillator "SAMPLE" wählen.
+
+WHEELS & MODULATION
+Pitch- und Mod-Wheel deines Keyboards sehen links neben der Tastatur.
+Reiter MOD: Bend Up/Down, Mod-Wheel/Aftertouch auf Vibrato, Cutoff,
+WT-Position – und die Matrix mit 8 Plätzen (jede Quelle auf jedes Ziel).
+
+FENSTERGRÖSSE & CPU
+Fenster an der Ecke unten rechts ziehen oder oben rechts 70–150 % wählen.
+Reiter FX > Qualität ECO spart Rechenleistung.
+
+HARMONIZER
+Knopf "HARMONIE" oben schaltet automatische Akkorde ein/aus.
+Reiter HARMONY: Tonart, Skala, Lage und welche Stimmen dazukommen
+(Terz, Quinte, Septime, None, Oktave + / -). Am besten im Modus POLY.
+
+KLAVIER & ORGEL
+Presets > PIANO, E-PIANO & KEYS, ORGEL.
+Flügel-Samples: Salamander Grand Piano V3 von Alexander Holm (CC BY 3.0).
+
+WAVETABLES
+Oszillator auf "WAVETABLE" stellen, Tabelle wählen, WT POS drehen.
+Eigene Wavetables (z. B. Serum-Format, 2048 Samples pro Frame):
+Reiter SAMPLE > WT LADEN, danach Tabelle "USER".
+
+DEINSTALLIEREN
+Doppelklick auf "K-54 S deinstallieren.command".
+
+HINWEIS
+Weil K-54 S nicht bei Apple registriert ist: Falls macOS beim Öffnen meldet,
+der Entwickler sei nicht verifiziert, mit Rechtsklick (Ctrl-Klick) auf die
+Datei > "Öffnen" bestätigen, oder unter Systemeinstellungen >
+Datenschutz & Sicherheit > "Trotzdem öffnen".

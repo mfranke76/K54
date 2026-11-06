@@ -1,0 +1,33 @@
+K-54 S · Keller54 · by Frank E.
+==============================
+
+INSTALLIEREN
+1. DAW schließen (Ableton, Cubase, Bitwig, FL Studio, Komplete Kontrol ...).
+2. Doppelklick auf "K-54-S-<Version>-Setup.exe" und den Schritten folgen.
+   Meldet Windows "Der Computer wurde durch Windows geschützt":
+   auf "Weitere Informationen" > "Trotzdem ausführen" klicken.
+
+Installiert werden:
+- VST3:  C:\Programme\Gemeinsame Dateien\VST3\K-54 S.vst3
+- App:   C:\Programme\Keller54\K-54 S\K-54 S.exe (Startmenü > Keller54)
+
+IN DER DAW
+Plugins neu scannen lassen, dann bei den Instrumenten
+"Keller54 > K-54 S" laden.
+
+KOMPLETE KONTROL (A61)
+Preferences > Plug-ins > Rescan, dann K-54 S laden.
+
+SAMPLES
+Reiter SAMPLE: Datei laden oder hineinziehen, oder mit REC vom
+Audio-Eingang aufnehmen. Aufnahmen landen in
+Dokumente\..\Musik\Keller54\K-54 S Samples.
+
+HARMONIZER, WAVETABLES, KLAVIER
+Wie in der Mac-Anleitung: Knopf "HARMONIE" oben, Reiter HARMONY,
+Oszillator auf WAVETABLE / SAMPLE / PIANO stellen.
+Flügel-Samples: Salamander Grand Piano V3 von Alexander Holm (CC BY 3.0).
+
+DEINSTALLIEREN
+Startmenü > Keller54 > K-54 S deinstallieren
+(oder Einstellungen > Apps).
