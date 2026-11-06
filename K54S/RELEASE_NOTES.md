@@ -8,8 +8,7 @@ Erste Version des K-54 S – Analog-, Wavetable- und Sample-Synthesizer:
 - Harmonizer (Tonart/Skala oder fester Akkord)
 - Skalierbares Fenster 70–150 %, ECO-Modus
 
-Downloads:
-- macOS (Apple Silicon + Intel): K-54-S-<Version>-Installer.dmg → AU, VST3, App
-- Windows 10/11 (x64): K-54-S-<Version>-Setup.exe → VST3, App
+Mac (Apple Silicon + Intel): AU, VST3 und App
+Windows 10/11 (64 Bit): VST3 und App
 
 Flügel-Samples: Salamander Grand Piano V3 von Alexander Holm (CC BY 3.0).
