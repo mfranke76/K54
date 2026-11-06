@@ -57,7 +57,7 @@ jobs:
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
-      - name: DMG bauen (Universal: Apple Silicon + Intel)
+      - name: "DMG bauen (Universal: Apple Silicon + Intel)"
         run: |
           chmod +x make-installer.sh
           sed -i '' 's/^open -R.*$//' make-installer.sh
