@@ -56,7 +56,7 @@ jobs:
           files: K54S/dist/*.exe
 
   macos:
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
       - name: "DMG bauen (Universal: Apple Silicon + Intel)"
