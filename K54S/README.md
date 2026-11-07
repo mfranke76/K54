@@ -9,7 +9,7 @@ Doppelklick auf **"K-54 S Installer bauen.command"** → erzeugt `K-54 S-<Versio
 ## Funktionen
 - 3 Oszillatoren: Dreieck / Säge / Rechteck / Puls / **Wavetable** / **Sample**
 - 9 Werks-Wavetables + eigene (USER) – Serum-Format (2048 Samples pro Frame) oder aus einem Sample
-- Sample: laden (Datei, Drag & Drop aus Finder/DAW), **Aufnahme vom Audio-Eingang** (Mikro/Interface, Auto-Start), Start/Ende/Loop/Ping-Pong, Key-Track, One-Shot
+- Sample: laden (Datei, Drag & Drop aus Finder/DAW), **Editor wie in einer DAW** (Zoom, Auswahl, Zuschneiden, Löschen, Fades, Normalisieren, Rückwärts, Undo), Lautstärke-Regler, **Aufnahme vom Audio-Eingang** (Mikro/Interface, Auto-Start), Start/Ende/Loop/Ping-Pong, Key-Track, One-Shot
 - 4-Pol-Ladder-Filter (LP24/LP12/BP/HP), Unison bis 7, Sub, Heat, Mod-Matrix (inkl. WT-Position), Chorus, Delay, Reverb
 - **Konzertflügel** (Oszillator-Typ PIANO, Salamander Grand V3 Samples, CC BY 3.0 – A. Holm)
 - **Modular:** Mod-Matrix mit 8 Plätzen (14 Quellen inkl. Mod-Env, Pitch-Bend, Mod-Wheel, Aftertouch, Breath, Expression → 20 Ziele)

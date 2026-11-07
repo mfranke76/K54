@@ -135,6 +135,7 @@ void K55Processor::readParams()
     sp.smpLoopStart = f (ParamID::smpLoopStart);
     sp.smpKeyTrack  = f (ParamID::smpKeyTrack) > 0.5f;
     sp.smpOneShot   = f (ParamID::smpOneShot) > 0.5f;
+    sp.smpGain      = juce::Decibels::decibelsToGain (f (ParamID::smpGain), -60.0f);
 }
 
 // ---------------------------------------------------------------- Audio
@@ -353,6 +354,9 @@ bool K55Processor::loadSampleFile (const juce::File& f, juce::String& error)
     auto s = SampleData::load (f, formats, error);
     if (s == nullptr) return false;
     sample = s;
+    undoStack.clear();
+    redoStack.clear();
+    editFile = juce::File();
     publishSources();
     return true;
 }
@@ -415,7 +419,202 @@ void K55Processor::stopPreview()
 void K55Processor::clearSample()
 {
     sample.reset();
+    undoStack.clear();
+    redoStack.clear();
+    editFile = juce::File();
     publishSources();
+}
+
+// ---------------------------------------------------------------- Sample-Editor
+namespace
+{
+    /** naechster Nulldurchgang (Kanal 0) im Umkreis von ~4 ms – Schnitte knacken dann nicht */
+    int nearestZeroCrossing (const juce::AudioBuffer<float>& a, int pos, double sr)
+    {
+        const int len = a.getNumSamples();
+        if (pos <= 0 || pos >= len) return juce::jlimit (0, len, pos);
+        const float* d = a.getReadPointer (0);
+        const int range = juce::jmax (8, (int) (sr * 0.004));
+        for (int k = 0; k <= range; ++k)
+        {
+            for (int sgn : { -1, 1 })
+            {
+                const int i = pos + sgn * k;
+                if (i <= 0 || i >= len) continue;
+                if ((d[i - 1] <= 0.0f && d[i] >= 0.0f) || (d[i - 1] >= 0.0f && d[i] <= 0.0f)) return i;
+            }
+        }
+        return pos;
+    }
+
+    void ramp (juce::AudioBuffer<float>& a, int start, int num, float from, float to)
+    {
+        start = juce::jlimit (0, a.getNumSamples(), start);
+        num = juce::jlimit (0, a.getNumSamples() - start, num);
+        if (num > 0)
+            for (int ch = 0; ch < a.getNumChannels(); ++ch)
+                a.applyGainRamp (ch, start, num, from, to);
+    }
+}
+
+bool K55Processor::isEditFile (const juce::File& f)
+{
+    return f.getParentDirectory() == getSampleFolder() && f.getFileNameWithoutExtension().contains ("(bearbeitet)");
+}
+
+bool K55Processor::writeWavFile (const juce::File& f, const juce::AudioBuffer<float>& audio, double sr)
+{
+    f.getParentDirectory().createDirectory();
+    juce::TemporaryFile tmp (f);
+    {
+        std::unique_ptr<juce::FileOutputStream> os (tmp.getFile().createOutputStream());
+        if (os == nullptr) return false;
+        juce::WavAudioFormat wav;
+        std::unique_ptr<juce::AudioFormatWriter> w (wav.createWriterFor (os.get(), sr, (unsigned) audio.getNumChannels(), 24, {}, 0));
+        if (w == nullptr) return false;
+        os.release();
+        if (! w->writeFromAudioSampleBuffer (audio, 0, audio.getNumSamples())) return false;
+    }
+    return tmp.overwriteTargetFileWithTemporary();
+}
+
+bool K55Processor::editSample (SampleEdit op, double selA, double selB)
+{
+    if (sample == nullptr || sample->length() < 32) return false;
+    const auto& src = sample->audio;
+    const int len = src.getNumSamples(), chs = src.getNumChannels();
+    const double sr = sample->sampleRate;
+    if (selA > selB) std::swap (selA, selB);
+    int a = juce::jlimit (0, len, (int) std::llround (selA * len));
+    int b = juce::jlimit (0, len, (int) std::llround (selB * len));
+    const bool hasSel = b - a >= 16;
+    if (editNeedsSelection (op) && ! hasSel) return false;
+    if (! hasSel) { a = 0; b = len; }                        // Normalisieren / Umkehren: ganzes Sample
+
+    const int fade = juce::jmax (8, (int) (sr * 0.0015));    // 1,5 ms gegen Knacken
+    auto s = std::make_shared<SampleData>();
+    s->sampleRate = sr;
+    bool resetMarkers = false;
+
+    switch (op)
+    {
+        case SampleEdit::trim:
+        {
+            a = nearestZeroCrossing (src, a, sr);
+            b = juce::jmax (a + 16, nearestZeroCrossing (src, b, sr));
+            b = juce::jmin (b, len);
+            s->audio.setSize (chs, b - a);
+            for (int ch = 0; ch < chs; ++ch) s->audio.copyFrom (ch, 0, src, ch, a, b - a);
+            ramp (s->audio, 0, juce::jmin (fade, (b - a) / 4), 0.0f, 1.0f);
+            ramp (s->audio, s->audio.getNumSamples() - juce::jmin (fade, (b - a) / 4), juce::jmin (fade, (b - a) / 4), 1.0f, 0.0f);
+            resetMarkers = true;
+            break;
+        }
+        case SampleEdit::cut:
+        {
+            a = nearestZeroCrossing (src, a, sr);
+            b = juce::jmax (a, nearestZeroCrossing (src, b, sr));
+            const int rest = len - (b - a);
+            if (rest < 32) return false;                      // alles loeschen = LEEREN
+            s->audio.setSize (chs, rest);
+            for (int ch = 0; ch < chs; ++ch)
+            {
+                if (a > 0)       s->audio.copyFrom (ch, 0, src, ch, 0, a);
+                if (len - b > 0) s->audio.copyFrom (ch, a, src, ch, b, len - b);
+            }
+            const int f = juce::jmin (fade, a, len - b);
+            if (f > 0) { ramp (s->audio, a - f, f, 1.0f, 0.0f); ramp (s->audio, a, f, 0.0f, 1.0f); }
+            resetMarkers = true;
+            break;
+        }
+        default:
+        {
+            s->audio.makeCopyOf (src);
+            const int n = b - a;
+            if (op == SampleEdit::silence)
+            {
+                const int f = juce::jmin (fade, n / 4);
+                ramp (s->audio, a, f, 1.0f, 0.0f);
+                for (int ch = 0; ch < chs; ++ch) s->audio.clear (ch, a + f, n - 2 * f);
+                ramp (s->audio, b - f, f, 0.0f, 1.0f);
+            }
+            else if (op == SampleEdit::fadeIn)   ramp (s->audio, a, n, 0.0f, 1.0f);
+            else if (op == SampleEdit::fadeOut)  ramp (s->audio, a, n, 1.0f, 0.0f);
+            else if (op == SampleEdit::normalize)
+            {
+                float pk = 0.0f;
+                for (int ch = 0; ch < chs; ++ch) pk = juce::jmax (pk, src.getMagnitude (ch, a, n));
+                if (pk < 1.0e-5f) return false;
+                const float g = juce::Decibels::decibelsToGain (-0.3f) / pk;
+                for (int ch = 0; ch < chs; ++ch) s->audio.applyGain (ch, a, n, g);
+            }
+            else if (op == SampleEdit::reverse)
+            {
+                for (int ch = 0; ch < chs; ++ch)
+                {
+                    auto* d = s->audio.getWritePointer (ch, a);
+                    std::reverse (d, d + n);
+                }
+                if (hasSel)
+                {
+                    const int f = juce::jmin (fade, n / 4);
+                    ramp (s->audio, a, f, 0.0f, 1.0f);
+                    ramp (s->audio, b - f, f, 1.0f, 0.0f);
+                }
+                else resetMarkers = false;
+            }
+            break;
+        }
+    }
+
+    // Bearbeitete Fassung als eigene WAV-Datei (das Original bleibt unangetastet)
+    if (isEditFile (sample->file))
+        editFile = sample->file;
+    else if (editFile == juce::File())
+        editFile = getSampleFolder().getChildFile (juce::File::createLegalFileName (sample->name + " (bearbeitet)") + ".wav").getNonexistentSibling (false);
+    s->file = editFile;
+    s->name = editFile.getFileNameWithoutExtension();
+
+    undoStack.push_back (sample);
+    if (undoStack.size() > maxUndo) undoStack.erase (undoStack.begin());
+    redoStack.clear();
+    applyEditedSample (s, resetMarkers);
+    return true;
+}
+
+void K55Processor::applyEditedSample (std::shared_ptr<SampleData> s, bool resetMarkers)
+{
+    if (s->peaks.empty()) s->buildPeaks();
+    if (isEditFile (s->file)) writeWavFile (s->file, s->audio, s->sampleRate);
+    sample = s;
+    if (resetMarkers)
+    {
+        setParam (ParamID::smpStart, 0.0f);
+        setParam (ParamID::smpEnd, 1.0f);
+        setParam (ParamID::smpLoopStart, 0.0f);
+    }
+    ++editVersion;
+    publishSources();
+}
+
+bool K55Processor::undoSampleEdit()
+{
+    if (undoStack.empty() || sample == nullptr) return false;
+    auto prev = undoStack.back();
+    undoStack.pop_back();
+    redoStack.push_back (sample);
+    applyEditedSample (prev, prev->length() != sample->length());
+    return true;
+}
+
+bool K55Processor::redoSampleEdit()
+{
+    if (redoStack.empty() || sample == nullptr) return false;
+    auto next = redoStack.back();
+    redoStack.pop_back();
+    undoStack.push_back (sample);
+    applyEditedSample (next, next->length() != sample->length());
+    return true;
 }
 
 const Wavetable* K55Processor::getTableForDisplay (int index) const
@@ -482,19 +681,13 @@ void K55Processor::finishRecording()
     auto folder = getSampleFolder();
     folder.createDirectory();
     auto file = folder.getChildFile (s->name + ".wav");
-    juce::WavAudioFormat wav;
-    if (auto os = std::unique_ptr<juce::FileOutputStream> (file.createOutputStream()))
-    {
-        if (auto* w = wav.createWriterFor (os.get(), currentSr, (unsigned) s->audio.getNumChannels(), 24, {}, 0))
-        {
-            os.release();
-            std::unique_ptr<juce::AudioFormatWriter> writer (w);
-            writer->writeFromAudioSampleBuffer (s->audio, 0, len);
-        }
-    }
+    writeWavFile (file, s->audio, currentSr);
     s->file = file;
     s->buildPeaks();
     sample = s;
+    undoStack.clear();
+    redoStack.clear();
+    editFile = juce::File();
     publishSources();
 }
 

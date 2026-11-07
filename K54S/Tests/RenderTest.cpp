@@ -69,12 +69,22 @@ static bool check (const juce::String& name, const juce::AudioBuffer<float>& b, 
     return ok;
 }
 
-static void shot (K55Processor& proc, int page, const juce::File& f)
+static juce::Component* findById (juce::Component* c, const juce::String& id)
+{
+    if (c->getComponentID() == id) return c;
+    for (auto* ch : c->getChildren())
+        if (auto* r = findById (ch, id)) return r;
+    return nullptr;
+}
+
+static void shot (K55Processor& proc, int page, const juce::File& f, std::function<void (juce::Component&)> prepare = {})
 {
     std::unique_ptr<juce::AudioProcessorEditor> ed (proc.createEditor());
     auto* k = dynamic_cast<K55Editor*> (ed.get());
     k->setPage (page);
-    for (int i = 0; i < 6; ++i) juce::MessageManager::getInstance()->runDispatchLoopUntil (40);
+    for (int i = 0; i < 3; ++i) juce::MessageManager::getInstance()->runDispatchLoopUntil (40);
+    if (prepare) prepare (*ed);
+    for (int i = 0; i < 4; ++i) juce::MessageManager::getInstance()->runDispatchLoopUntil (40);
     auto im = ed->createComponentSnapshot (ed->getLocalBounds(), true, 2.0f);
     f.deleteFile();
     juce::FileOutputStream fo (f);
@@ -309,6 +319,98 @@ int main (int argc, char** argv)
         file.deleteFile();
     }
 
+    // ---------------------------------------------------------------- 5a) Sample-Editor (Schneiden wie in einer DAW) + Lautstaerke
+    {
+        using SE = K55Processor::SampleEdit;
+        allOk &= proc.loadSampleFile (smpFile, err);
+        const int full = proc.getSample()->length();
+        auto len = [&] { return proc.getSample() != nullptr ? proc.getSample()->length() : 0; };
+        auto near = [] (int v, double want, double tol) { return std::abs ((double) v - want) <= tol; };
+        const double zc = sr * 0.005;
+
+        setP (proc, ParamID::smpStart, 0.1f); setP (proc, ParamID::smpEnd, 0.9f);
+        bool ok = proc.editSample (SE::trim, 0.25, 0.5);
+        const auto f1 = proc.getSample()->file;
+        ok &= near (len(), full * 0.25, 2 * zc) && f1.existsAsFile() && f1 != smpFile && f1.getFileName().contains ("(bearbeitet)");
+        ok &= proc.apvts.getRawParameterValue (ParamID::smpStart)->load() < 0.001f && proc.apvts.getRawParameterValue (ParamID::smpEnd)->load() > 0.999f;
+        std::printf ("     Zuschneiden 25-50 %%: %d Samples (soll ~%d), Datei %s, Marken zurueckgesetzt\n", len(), full / 4, f1.getFileName().toRawUTF8());
+        // Original unveraendert?
+        {
+            juce::String e2; auto orig = SampleData::load (smpFile, proc.formats, e2);
+            ok &= orig != nullptr && orig->length() == full;
+        }
+        // gespeicherte Datei = Inhalt im Speicher?
+        {
+            juce::String e2; auto disk = SampleData::load (f1, proc.formats, e2);
+            ok &= disk != nullptr && disk->length() == len();
+        }
+        ok &= proc.undoSampleEdit() && len() == full;
+        ok &= proc.redoSampleEdit() && near (len(), full * 0.25, 2 * zc);
+        ok &= proc.undoSampleEdit() && len() == full && ! proc.canUndoSampleEdit() && proc.canRedoSampleEdit();
+        std::printf ("     Rueckgaengig / Wiederholen: %s\n", ok ? "ok" : "FEHLER");
+
+        // Loeschen: Rest rueckt zusammen, kein Sprung an der Schnittstelle
+        ok &= proc.editSample (SE::cut, 0.25, 0.5);
+        const int cutAt = (int) (full * 0.25);
+        float jump = 0.0f;
+        {
+            auto& au = proc.getSample()->audio;
+            for (int i = juce::jmax (1, cutAt - (int) zc * 2); i < juce::jmin (au.getNumSamples(), cutAt + (int) zc * 2); ++i)
+                jump = juce::jmax (jump, std::abs (au.getSample (0, i) - au.getSample (0, i - 1)));
+        }
+        ok &= near (len(), full * 0.75, 2 * zc) && jump < 0.06f;
+        std::printf ("     Loeschen 25-50 %%: %d Samples (soll ~%d), groesster Sprung an der Schnittstelle %.3f\n", len(), full * 3 / 4, jump);
+        ok &= proc.getSample()->file == f1;   // weiter dieselbe bearbeitete Datei
+
+        ok &= proc.editSample (SE::silence, 0.0, 0.1);
+        const float quiet = proc.getSample()->audio.getMagnitude (0, (int) (len() * 0.01), (int) (len() * 0.08));
+        const float preFade = std::abs (proc.getSample()->audio.getMagnitude (0, (int) (len() * 0.15), 64));
+        ok &= proc.editSample (SE::fadeIn, 0.15, 0.3);
+        const float firstIn = std::abs (proc.getSample()->audio.getMagnitude (0, (int) std::llround (len() * 0.15), 4));
+        ok &= preFade > 0.05f;
+        ok &= proc.editSample (SE::normalize, 0.0, 0.0);
+        float pk = 0.0f; for (int c = 0; c < proc.getSample()->audio.getNumChannels(); ++c) pk = juce::jmax (pk, proc.getSample()->audio.getMagnitude (c, 0, len()));
+        auto before = proc.getSample();
+        ok &= proc.editSample (SE::reverse, 0.0, 0.0);
+        const bool reversed = std::abs (proc.getSample()->audio.getSample (0, 10) - before->audio.getSample (0, len() - 11)) < 1.0e-6f;
+        ok &= ! proc.editSample (SE::trim, 0.3, 0.3);    // ohne Auswahl: nichts tun
+        std::printf ("     Stille %.4f, Fade-In beginnt bei %.4f, Normalisiert auf %.2f dB, Umkehren %s\n", quiet, firstIn, juce::Decibels::gainToDecibels (pk), reversed ? "ok" : "FEHLER");
+        ok &= quiet < 0.001f && firstIn < 0.01f && std::abs (juce::Decibels::gainToDecibels (pk) + 0.3f) < 0.05f && reversed;
+
+        // Projekt merkt sich die bearbeitete Fassung
+        {
+            const int l0 = len();
+            juce::MemoryBlock mb;
+            proc.getStateInformation (mb);
+            proc.clearSample();
+            proc.setStateInformation (mb.getData(), (int) mb.getSize());
+            const bool back = proc.getSample() != nullptr && proc.getSample()->file == f1 && len() == l0;
+            std::printf ("     Projekt laedt bearbeitete Fassung: %s\n", back ? "ja" : "NEIN");
+            ok &= back;
+        }
+
+        // Lautstaerke-Regler: -12 dB = ein Viertel des Pegels
+        proc.loadSampleFile (smpFile, err);
+        proc.setCurrentProgram (presetIndex ("Sample chromatisch"));
+        setP (proc, ParamID::smpRoot, 57);
+        auto peakAt = [&] (float db)
+        {
+            setP (proc, ParamID::smpGain, db);
+            proc.prepareToPlay (sr, block);
+            auto out = render (proc, sr, block, 0.6, { { 0, 57, true, 1.0f }, { at (0.3), 57, false, 0.0f } });
+            return out.getMagnitude (0, 0, out.getNumSamples());
+        };
+        const float p0 = peakAt (0.0f), pm12 = peakAt (-12.0f);
+        setP (proc, ParamID::smpGain, 0.0f);
+        const float ratioDb = juce::Decibels::gainToDecibels (pm12 / juce::jmax (1.0e-6f, p0));
+        std::printf ("     Sample-Lautstaerke -12 dB -> Ausgang %.1f dB leiser (Filter/Drive veraendern es etwas)\n", -ratioDb);
+        ok &= ratioDb < -6.0f && ratioDb > -18.0f;
+
+        std::printf ("%s Sample-Editor\n", ok ? "OK  " : "FAIL");
+        allOk &= ok;
+        f1.deleteFile();
+    }
+
     // ---------------------------------------------------------------- 5b) Harmonizer
     {
         Harmonizer::Settings hs; hs.on = true; hs.key = 0; hs.scale = 0;   // C-Dur, Terz + Quinte
@@ -352,6 +454,17 @@ int main (int argc, char** argv)
     setP (proc, ParamID::smpEnd, 0.85f);
     setP (proc, ParamID::smpLoopStart, 0.4f);
     shot (proc, 2, outDir.getChildFile ("screen_sample.png"));
+    proc.loadSampleFile (smpFile, err);
+    setP (proc, ParamID::smpGain, 4.0f);
+    shot (proc, 2, outDir.getChildFile ("screen_sample_edit.png"), [] (juce::Component& ed)
+    {
+        if (auto* w = dynamic_cast<SampleWaveView*> (findById (&ed, "sampleWave")))
+        {
+            w->zoomBy (0.5, 0.3);
+            w->setSelection (0.22, 0.36);
+        }
+    });
+    setP (proc, ParamID::smpGain, 0.0f);
     shot (proc, 3, outDir.getChildFile ("screen_fx.png"));
     shot (proc, 4, outDir.getChildFile ("screen_harmony.png"));
 

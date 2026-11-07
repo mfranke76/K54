@@ -50,6 +50,7 @@ struct SynthParams
     int   smpRoot = 60, smpLoop = 0;
     float smpStart = 0, smpEnd = 1, smpLoopStart = 0;
     bool  smpKeyTrack = true, smpOneShot = false;
+    float smpGain = 1.0f;                       // Sample-Lautstaerke (linear)
 };
 
 namespace LayerMathLite
@@ -424,7 +425,7 @@ public:
                     if (w == ParamChoices::wSample || w == ParamChoices::wPiano)
                     {
                         float a = 0.0f, b = 0.0f;
-                        if (w == ParamChoices::wSample) { if (smp == nullptr) continue; sampleTick (u, i, smpRatio[i] * uRatio, *smp, p.smpLoop, sStart, sEnd, sLoop, a, b); }
+                        if (w == ParamChoices::wSample) { if (smp == nullptr) continue; sampleTick (u, i, smpRatio[i] * uRatio, *smp, p.smpLoop, sStart, sEnd, sLoop, a, b); a *= p.smpGain; b *= p.smpGain; }
                         else { if (pZone[i] == nullptr) continue; sampleTick (u, i, smpRatio[i] * uRatio, *pZone[i], 0, 0.0, (double) pZone[i]->length() - 3.0, 0.0, a, b); }
                         suL += a * lvl[i];
                         suR += b * lvl[i];

@@ -38,99 +38,280 @@ private:
 };
 
 // ---------------------------------------------------------------------------
-//  Wellenform mit Start-, End- und Loop-Marken (ziehbar)
+//  Sample-Editor wie in einer DAW: Wellenform mit Zoom, Auswahl, Start-/End-/Loop-Marken
+//    - Marken S / E / LOOP mit der Maus ziehen
+//    - sonst ziehen = Bereich auswaehlen (Shift = Auswahl erweitern, Doppelklick = alles)
+//    - Mausrad / Pinch = Zoom an der Maus, waagerecht wischen (oder Shift + Rad) = verschieben
+//    - Tasten: Entf = Auswahl loeschen, Cmd/Strg+Z = rueckgaengig, Cmd/Strg+Shift+Z = wiederholen,
+//              Cmd/Strg+A = alles auswaehlen, Esc = Auswahl aufheben
 class SampleWaveView : public juce::Component
 {
 public:
-    explicit SampleWaveView (K55Processor& p) : proc (p) {}
+    explicit SampleWaveView (K55Processor& p) : proc (p)
+    {
+        setComponentID ("sampleWave");
+        lastSample = proc.getSample().get();
+        setWantsKeyboardFocus (true);
+        setMouseClickGrabsKeyboardFocus (true);
+    }
 
+    // ---- Ansicht / Auswahl (Anteile 0..1 der Sample-Laenge)
+    bool hasSelection() const noexcept   { return selB - selA > 0.00001; }
+    double getSelStart() const noexcept  { return selA; }
+    double getSelEnd() const noexcept    { return selB; }
+    void clearSelection()                { selA = selB = 0.0; changed(); }
+    void setSelection (double a, double b) { syncSample(); selA = juce::jlimit (0.0, 1.0, juce::jmin (a, b)); selB = juce::jlimit (0.0, 1.0, juce::jmax (a, b)); changed(); }
+    void selectAll()                     { syncSample(); if (proc.getSample() != nullptr) { selA = 0.0; selB = 1.0; changed(); } }
+    bool isZoomed() const noexcept       { return viewLen < 0.999; }
+
+    void zoomAll()                       { viewStart = 0.0; viewLen = 1.0; changed(); }
+    void zoomBy (double factor, double anchor = -1.0)
+    {
+        auto s = proc.getSample();
+        if (s == nullptr) return;
+        checkSampleChanged (s.get());
+        if (anchor < 0.0) anchor = hasSelection() ? (selA + selB) * 0.5 : viewStart + viewLen * 0.5;
+        const double minLen = juce::jmin (1.0, 64.0 / juce::jmax (64.0, (double) s->length()));   // bis ca. 64 Samples breit
+        const double newLen = juce::jlimit (minLen, 1.0, viewLen * factor);
+        const double rel = (anchor - viewStart) / viewLen;
+        viewStart = anchor - rel * newLen;
+        viewLen = newLen;
+        clampView();
+        changed();
+    }
+    void zoomToSelection()
+    {
+        if (! hasSelection()) return;
+        const double pad = (selB - selA) * 0.05;
+        viewStart = selA - pad; viewLen = juce::jmax (selB - selA + 2.0 * pad, 0.0005);
+        clampView(); changed();
+    }
+
+    /** Bearbeitung ausfuehren (Auswahl oder ganzes Sample) */
+    bool edit (K55Processor::SampleEdit op)
+    {
+        const bool sel = hasSelection();
+        if (K55Processor::editNeedsSelection (op) && ! sel) return false;
+        const double a = sel ? selA : 0.0, b = sel ? selB : 0.0;
+        const auto before = proc.getSample();
+        const double oldLen = before != nullptr ? (double) before->length() : 1.0;
+        if (! proc.editSample (op, a, b)) return false;
+        const auto after = proc.getSample();
+        const double newLen = after != nullptr ? (double) after->length() : 1.0;
+        lastSample = after.get();
+        if (op == K55Processor::SampleEdit::trim)
+        {
+            selA = selB = 0.0; zoomAll();
+        }
+        else if (op == K55Processor::SampleEdit::cut)
+        {
+            // Ansicht bleibt an der Schnittstelle stehen
+            const double cutPos = a * oldLen / newLen;
+            viewLen = juce::jmin (1.0, viewLen * oldLen / newLen);
+            viewStart = cutPos - viewLen * 0.5;
+            clampView();
+            selA = selB = 0.0;
+        }
+        changed();
+        return true;
+    }
+    bool undo() { const bool ok = proc.undoSampleEdit(); if (ok) afterHistoryStep(); return ok; }
+    bool redo() { const bool ok = proc.redoSampleEdit(); if (ok) afterHistoryStep(); return ok; }
+
+    /** setzt Start/Ende-Marken auf die Auswahl (zerstoerungsfrei) */
+    void markersFromSelection()
+    {
+        if (! hasSelection()) return;
+        setMarker (ParamID::smpStart, (float) selA);
+        setMarker (ParamID::smpEnd, (float) selB);
+        changed();
+    }
+
+    std::function<void()> onEmptyClick, onStateChanged;
+    bool dragOver = false;
+
+    // ------------------------------------------------------------------ Zeichnen
     void paint (juce::Graphics& g) override
     {
         using namespace K54Colours;
         auto b = getLocalBounds().toFloat();
         g.setColour (juce::Colour (0xff0E0E10));
         g.fillRoundedRectangle (b, 6.0f);
-        g.setColour (dragOver ? gold : line);
-        g.drawRoundedRectangle (b.reduced (0.5f), 6.0f, dragOver ? 2.0f : 1.0f);
 
         auto s = proc.getSample();
-        if (s == nullptr || s->peaks.empty())
+        if (s == nullptr || s->length() == 0)
         {
+            g.setColour (dragOver ? gold : line);
+            g.drawRoundedRectangle (b.reduced (0.5f), 6.0f, dragOver ? 2.0f : 1.0f);
             g.setColour (creamDim.withAlpha (0.6f));
             g.setFont (K54Fonts::make (K54Fonts::syncopate(), 10.0f, 0.15f));
             g.drawFittedText (ParamChoices::u8 ("AUDIODATEI HIER HINEINZIEHEN (FINDER / DAW)\nODER \xc2\xbbLADEN\xc2\xab / \xc2\xbbREC\xc2\xab DR\xc3\x9c" "CKEN"),
                               getLocalBounds().reduced (10), juce::Justification::centred, 3);
             return;
         }
+        checkSampleChanged (s.get());
+
+        auto inner = waveArea();
+        const float gain = juce::Decibels::decibelsToGain (value (ParamID::smpGain), -60.0f);
+        const float mid = inner.getCentreY(), h = inner.getHeight() * 0.5f;
+        updateColumns (*s, (int) inner.getWidth());
 
         const float st = value (ParamID::smpStart), en = juce::jmax (st + 0.001f, value (ParamID::smpEnd));
         const float ls = st + value (ParamID::smpLoopStart) * (en - st);
         const bool loop = juce::roundToInt (value (ParamID::smpLoop)) > 0;
-        auto inner = b.reduced (6.0f, 8.0f);
-        const float mid = inner.getCentreY(), h = inner.getHeight() * 0.5f;
-        const int pts = (int) s->peaks.size();
 
-        // ausserhalb Start..Ende abgedunkelt
-        juce::Path wave;
-        for (int i = 0; i < pts; ++i)
+        // Nulllinie + 0-dB-Linien
+        g.setColour (line.withAlpha (0.6f));
+        g.fillRect (inner.getX(), mid, inner.getWidth(), 1.0f);
+
+        // Wellenform (Spalten mit Min/Max, mit Sample-Lautstaerke skaliert)
+        juce::Path wave, clip;
+        const int W = (int) columns.size();
+        for (int x = 0; x < W; ++x)
         {
-            const float x = inner.getX() + inner.getWidth() * (float) i / (float) (pts - 1);
-            const float v = juce::jmin (1.0f, s->peaks[(size_t) i]) * h;
-            wave.addRectangle (x, mid - v, juce::jmax (1.0f, inner.getWidth() / (float) pts), v * 2.0f + 0.5f);
+            float lo = columns[(size_t) x].first * gain, hi = columns[(size_t) x].second * gain;
+            const float px = inner.getX() + (float) x;
+            if (hi > 1.0f || lo < -1.0f) clip.addRectangle (px, inner.getY(), 1.0f, inner.getHeight());
+            hi = juce::jlimit (-1.0f, 1.0f, hi); lo = juce::jlimit (-1.0f, 1.0f, lo);
+            const float y0 = mid - hi * h, y1 = mid - lo * h;
+            wave.addRectangle (px, y0, 1.0f, juce::jmax (1.0f, y1 - y0));
         }
         g.setColour (creamDim.withAlpha (0.35f));
         g.fillPath (wave);
         {
             juce::Graphics::ScopedSaveState ss (g);
-            g.reduceClipRegion (juce::Rectangle<float> (xFor (st), b.getY(), xFor (en) - xFor (st), b.getHeight()).toNearestInt());
-            g.setColour (gold);
-            g.fillPath (wave);
+            const float x0 = juce::jmax (inner.getX(), xFor (st)), x1 = juce::jmin (inner.getRight(), xFor (en));
+            if (x1 > x0)
+            {
+                g.reduceClipRegion (juce::Rectangle<float> (x0, b.getY(), x1 - x0, b.getHeight()).toNearestInt());
+                g.setColour (gold);
+                g.fillPath (wave);
+            }
         }
+        if (! clip.isEmpty())
+        {
+            g.setColour (juce::Colour (0x40E0503A));
+            g.fillPath (clip);
+        }
+
+        // Auswahl
+        if (hasSelection())
+        {
+            const float x0 = juce::jmax (inner.getX(), xFor ((float) selA)), x1 = juce::jmin (inner.getRight(), xFor ((float) selB));
+            if (x1 > x0)
+            {
+                g.setColour (cream.withAlpha (0.12f));
+                g.fillRect (x0, b.getY() + 1.0f, x1 - x0, b.getHeight() - 2.0f);
+                g.setColour (cream.withAlpha (0.7f));
+                if (xFor ((float) selA) >= inner.getX()) g.fillRect (x0, b.getY() + 1.0f, 1.0f, b.getHeight() - 2.0f);
+                if (xFor ((float) selB) <= inner.getRight()) g.fillRect (x1 - 1.0f, b.getY() + 1.0f, 1.0f, b.getHeight() - 2.0f);
+            }
+        }
+
+        // Marken
         auto marker = [&] (float pos, juce::Colour c, const char* t)
         {
             const float x = xFor (pos);
+            if (x < inner.getX() - 1.0f || x > inner.getRight() + 1.0f) return;
             g.setColour (c);
             g.fillRect (x - 1.0f, b.getY() + 2.0f, 2.0f, b.getHeight() - 4.0f);
+            g.fillRect (x - 1.0f, b.getY() + 2.0f, 8.0f, 2.0f);
             g.setFont (K54Fonts::make (K54Fonts::syncopateBold(), 8.0f, 0.1f));
-            g.drawText (t, juce::Rectangle<float> (x + 3.0f, b.getY() + 3.0f, 40.0f, 12.0f), juce::Justification::centredLeft);
+            g.drawText (t, juce::Rectangle<float> (x + 3.0f, b.getY() + 5.0f, 40.0f, 12.0f), juce::Justification::centredLeft);
         };
         marker (st, cream, "S");
         marker (en, cream, "E");
         if (loop) marker (ls, juce::Colour (0xff6FC3DF), "LOOP");
 
+        // Uebersicht oben, wenn gezoomt
+        if (isZoomed())
+        {
+            auto ov = juce::Rectangle<float> (inner.getX(), b.getY() + 2.0f, inner.getWidth(), 3.0f);
+            g.setColour (line);
+            g.fillRect (ov);
+            g.setColour (gold);
+            g.fillRect (ov.getX() + ov.getWidth() * (float) viewStart, ov.getY(), juce::jmax (3.0f, ov.getWidth() * (float) viewLen), ov.getHeight());
+        }
+
+        // Infozeile
         g.setColour (creamDim);
         g.setFont (K54Fonts::make (K54Fonts::syncopate(), 8.5f, 0.1f));
-        const juce::String info = s->name.toUpperCase() + "   " + juce::String ((double) s->length() / s->sampleRate, 2) + " S   "
-                                + (s->isStereo() ? "STEREO" : "MONO") + "   " + juce::String (juce::roundToInt (s->sampleRate)) + " HZ";
+        const double secs = (double) s->length() / s->sampleRate;
+        juce::String info = s->name.toUpperCase() + "   " + juce::String (secs, 2) + " S   "
+                          + (s->isStereo() ? "STEREO" : "MONO") + "   " + juce::String (juce::roundToInt (s->sampleRate)) + " HZ";
+        const float db = value (ParamID::smpGain);
+        if (std::abs (db) > 0.05f) info << "   " << (db > 0 ? "+" : "") << juce::String (db, 1) << " DB";
         g.drawText (info, getLocalBounds().reduced (10, 4).removeFromBottom (14), juce::Justification::centredRight);
+        juce::String left;
+        if (hasSelection())
+            left << ParamChoices::u8 ("AUSWAHL ") << fmtTime (selA * secs) << " - " << fmtTime (selB * secs)
+                 << "  (" << fmtTime ((selB - selA) * secs) << ")";
+        else if (isZoomed())
+            left << "ZOOM " << fmtTime (viewStart * secs) << " - " << fmtTime ((viewStart + viewLen) * secs);
+        if (left.isNotEmpty())
+            g.drawText (left, getLocalBounds().reduced (10, 4).removeFromBottom (14), juce::Justification::centredLeft);
+
+        g.setColour (dragOver ? gold : (hasKeyboardFocus (false) ? goldDim : line));
+        g.drawRoundedRectangle (b.reduced (0.5f), 6.0f, dragOver ? 2.0f : 1.0f);
     }
 
+    // ------------------------------------------------------------------ Maus
     void mouseDown (const juce::MouseEvent& e) override
     {
         if (proc.getSample() == nullptr) { if (onEmptyClick) onEmptyClick(); return; }
-        const float st = value (ParamID::smpStart), en = value (ParamID::smpEnd);
-        const float ls = st + value (ParamID::smpLoopStart) * (en - st);
         const float x = (float) e.x;
-        const bool loop = juce::roundToInt (value (ParamID::smpLoop)) > 0;
-        float best = 1.0e9f;
         dragging = nullptr;
-        auto test = [&] (float pos, const char* id) { const float d = std::abs (xFor (pos) - x); if (d < best) { best = d; dragging = id; } };
-        test (st, ParamID::smpStart);
-        test (en, ParamID::smpEnd);
-        if (loop) test (ls, ParamID::smpLoopStart);
-        if (best > 14.0f) dragging = x < (xFor (st) + xFor (en)) * 0.5f ? ParamID::smpStart : ParamID::smpEnd;
-        if (auto* p = proc.apvts.getParameter (dragging)) p->beginChangeGesture();
+        selecting = false;
+
+        if (! e.mods.isShiftDown())
+        {
+            const float st = value (ParamID::smpStart), en = value (ParamID::smpEnd);
+            const float ls = st + value (ParamID::smpLoopStart) * (en - st);
+            const bool loop = juce::roundToInt (value (ParamID::smpLoop)) > 0;
+            float best = 7.0f;
+            auto test = [&] (float pos, const char* id) { const float d = std::abs (xFor (pos) - x); if (d < best) { best = d; dragging = id; } };
+            test (st, ParamID::smpStart);
+            test (en, ParamID::smpEnd);
+            if (loop) test (ls, ParamID::smpLoopStart);
+            // Marken lassen sich auch oben an der kleinen Fahne greifen
+            if (dragging == nullptr && e.y < 18)
+            {
+                best = 12.0f;
+                test (st, ParamID::smpStart); test (en, ParamID::smpEnd);
+                if (loop) test (ls, ParamID::smpLoopStart);
+            }
+        }
+        if (dragging != nullptr)
+        {
+            if (auto* p = proc.apvts.getParameter (dragging)) p->beginChangeGesture();
+            mouseDrag (e);
+            return;
+        }
+        const double pos = posAt (x);
+        if (e.mods.isShiftDown() && hasSelection())
+            anchor = std::abs (pos - selA) < std::abs (pos - selB) ? selB : selA;
+        else
+            anchor = pos;
+        selecting = true;
         mouseDrag (e);
     }
 
     void mouseDrag (const juce::MouseEvent& e) override
     {
+        if (selecting)
+        {
+            autoScroll ((float) e.x);
+            const double pos = juce::jlimit (0.0, 1.0, posAt ((float) e.x));
+            selA = juce::jmin (anchor, pos);
+            selB = juce::jmax (anchor, pos);
+            changed();
+            return;
+        }
         if (dragging == nullptr) return;
-        auto inner = getLocalBounds().toFloat().reduced (6.0f, 8.0f);
-        float pos = juce::jlimit (0.0f, 1.0f, ((float) e.x - inner.getX()) / inner.getWidth());
+        float pos = (float) juce::jlimit (0.0, 1.0, posAt ((float) e.x));
         const float st = value (ParamID::smpStart), en = value (ParamID::smpEnd);
-        if (dragging == ParamID::smpStart)          pos = juce::jmin (pos, en - 0.005f);
-        else if (dragging == ParamID::smpEnd)       pos = juce::jmax (pos, st + 0.005f);
+        if (dragging == ParamID::smpStart)          pos = juce::jmin (pos, en - 0.001f);
+        else if (dragging == ParamID::smpEnd)       pos = juce::jmax (pos, st + 0.001f);
         else                                        pos = juce::jlimit (0.0f, 0.98f, (pos - st) / juce::jmax (0.001f, en - st));
         if (auto* p = proc.apvts.getParameter (dragging)) p->setValueNotifyingHost (p->convertTo0to1 (pos));
         repaint();
@@ -138,22 +319,162 @@ public:
 
     void mouseUp (const juce::MouseEvent&) override
     {
-        if (auto* p = proc.apvts.getParameter (dragging != nullptr ? dragging : "")) p->endChangeGesture();
+        if (dragging != nullptr)
+            if (auto* p = proc.apvts.getParameter (dragging)) p->endChangeGesture();
         dragging = nullptr;
+        if (selecting && (xFor ((float) selB) - xFor ((float) selA)) < 3.0f) clearSelection();
+        selecting = false;
     }
 
-    std::function<void()> onEmptyClick;
-    bool dragOver = false;
+    void mouseDoubleClick (const juce::MouseEvent&) override { selectAll(); }
+
+    void mouseWheelMove (const juce::MouseEvent& e, const juce::MouseWheelDetails& w) override
+    {
+        if (proc.getSample() == nullptr) return;
+        const bool horizontal = std::abs (w.deltaX) > std::abs (w.deltaY) || e.mods.isShiftDown();
+        if (horizontal)
+        {
+            const float d = std::abs (w.deltaX) > std::abs (w.deltaY) ? w.deltaX : w.deltaY;
+            viewStart -= (double) d * viewLen * 0.5;
+            clampView(); changed();
+        }
+        else if (std::abs (w.deltaY) > 0.0f)
+            zoomBy (std::pow (0.5, (double) w.deltaY * 2.5), posAt ((float) e.x));
+    }
+
+    void mouseMagnify (const juce::MouseEvent& e, float scale) override
+    {
+        if (scale > 0.0f) zoomBy (1.0 / scale, posAt ((float) e.x));
+    }
+
+    bool keyPressed (const juce::KeyPress& k) override
+    {
+        using SE = K55Processor::SampleEdit;
+        const bool cmd = k.getModifiers().isCommandDown();
+        const int code = k.getKeyCode();
+        if (cmd && (code == 'Z' || code == 'z')) return k.getModifiers().isShiftDown() ? redo() || true : undo() || true;
+        if (cmd && (code == 'Y' || code == 'y')) return redo() || true;
+        if (cmd && (code == 'A' || code == 'a')) { selectAll(); return true; }
+        if (code == juce::KeyPress::deleteKey || code == juce::KeyPress::backspaceKey) { edit (SE::cut); return true; }
+        if (code == juce::KeyPress::escapeKey) { clearSelection(); return true; }
+        if (code == '+' || code == '=') { zoomBy (0.5); return true; }
+        if (code == '-') { zoomBy (2.0); return true; }
+        return false;
+    }
+
+    void focusGained (FocusChangeType) override { repaint(); }
+    void focusLost (FocusChangeType) override   { repaint(); }
+    void resized() override { columnsKey = {}; }
 
 private:
+    juce::Rectangle<float> waveArea() const { return getLocalBounds().toFloat().reduced (6.0f, 10.0f).withTrimmedBottom (8.0f); }
     float value (const char* id) const { return proc.apvts.getRawParameterValue (id)->load(); }
+    double posAt (float x) const
+    {
+        auto inner = waveArea();
+        return viewStart + viewLen * (double) ((x - inner.getX()) / inner.getWidth());
+    }
     float xFor (float pos) const
     {
-        auto inner = getLocalBounds().toFloat().reduced (6.0f, 8.0f);
-        return inner.getX() + inner.getWidth() * pos;
+        auto inner = waveArea();
+        return inner.getX() + inner.getWidth() * (float) (((double) pos - viewStart) / viewLen);
     }
+    void clampView()
+    {
+        viewLen = juce::jlimit (0.00001, 1.0, viewLen);
+        viewStart = juce::jlimit (0.0, 1.0 - viewLen, viewStart);
+    }
+    void autoScroll (float x)
+    {
+        auto inner = waveArea();
+        if (! isZoomed()) return;
+        if (x < inner.getX())          { viewStart -= viewLen * 0.03; clampView(); }
+        else if (x > inner.getRight()) { viewStart += viewLen * 0.03; clampView(); }
+    }
+    void setMarker (const char* id, float v)
+    {
+        if (auto* p = proc.apvts.getParameter (id))
+        {
+            p->beginChangeGesture();
+            p->setValueNotifyingHost (p->convertTo0to1 (v));
+            p->endChangeGesture();
+        }
+    }
+    void changed()
+    {
+        repaint();
+        if (onStateChanged) onStateChanged();
+    }
+    void afterHistoryStep()
+    {
+        lastSample = proc.getSample().get();
+        selA = selB = 0.0;
+        clampView();
+        changed();
+    }
+    void syncSample() { checkSampleChanged (proc.getSample().get()); }
+    /** neues Sample (geladen, aufgenommen) -> Ansicht zuruecksetzen */
+    void checkSampleChanged (const SampleData* s)
+    {
+        if (s == lastSample) return;
+        lastSample = s;
+        selA = selB = 0.0;
+        viewStart = 0.0; viewLen = 1.0;
+        if (onStateChanged) onStateChanged();
+    }
+    static juce::String fmtTime (double sec)
+    {
+        if (sec < 10.0) return juce::String (sec, 3) + " S";
+        return juce::String (sec, 2) + " S";
+    }
+
+    /** Min/Max je Bildschirmspalte, nur neu berechnet wenn sich Ansicht oder Sample aendern */
+    void updateColumns (const SampleData& s, int width)
+    {
+        const std::tuple<const void*, double, double, int> key { &s, viewStart, viewLen, width * 100000 + (proc.sourceVersion.load() % 100000) };
+        if (key == columnsKey) return;
+        columnsKey = key;
+        columns.assign ((size_t) juce::jmax (0, width), { 0.0f, 0.0f });
+        const int len = s.length(), chs = s.audio.getNumChannels();
+        if (len == 0 || width <= 0) return;
+        const double first = viewStart * len, perPx = viewLen * len / width;
+        for (int x = 0; x < width; ++x)
+        {
+            const double p0 = first + perPx * x, p1 = p0 + perPx;
+            float lo = 0.0f, hi = 0.0f;
+            if (perPx >= 1.0)
+            {
+                const int a = juce::jlimit (0, len - 1, (int) p0), b = juce::jlimit (a + 1, len, (int) p1);
+                lo = 1.0f; hi = -1.0f;
+                for (int c = 0; c < chs; ++c)
+                {
+                    auto r = s.audio.findMinMax (c, a, b - a);
+                    lo = juce::jmin (lo, r.getStart()); hi = juce::jmax (hi, r.getEnd());
+                }
+            }
+            else
+            {
+                // stark gezoomt: zwischen den Samples interpolieren (Linie statt Balken)
+                const double q0 = juce::jlimit (0.0, (double) len - 1.0, p0), q1 = juce::jlimit (0.0, (double) len - 1.0, p1);
+                lo = 1.0f; hi = -1.0f;
+                for (int c = 0; c < chs; ++c)
+                {
+                    const float v0 = s.read (c, q0), v1 = s.read (c, q1);
+                    lo = juce::jmin (lo, v0, v1); hi = juce::jmax (hi, v0, v1);
+                }
+            }
+            columns[(size_t) x] = { lo, hi };
+        }
+    }
+
     K55Processor& proc;
     const char* dragging = nullptr;
+    bool selecting = false;
+    double anchor = 0.0, selA = 0.0, selB = 0.0;
+    double viewStart = 0.0, viewLen = 1.0;
+    const SampleData* lastSample = nullptr;
+    std::vector<std::pair<float, float>> columns;
+    std::tuple<const void*, double, double, int> columnsKey { nullptr, -1.0, -1.0, -1 };
 };
 
 // ---------------------------------------------------------------------------
@@ -232,6 +553,44 @@ public:
         root    = &knob (ParamID::smpRoot, "Root Key");
         keyTrk  = &toggle (ParamID::smpKeyTrack, "KEY TRACK", "An: Sample folgt der Tastatur (chromatisch). Aus: immer Originaltonhoehe");
         oneShot = &toggle (ParamID::smpOneShot, "ONE-SHOT", "Sample spielt nach dem Loslassen der Taste zu Ende (nur ohne Loop)");
+        volume  = &knob (ParamID::smpGain, "Volume", true);
+        volume->s.setTooltip ("Lautstaerke des Samples (-24 bis +24 dB). Doppelklick = 0 dB");
+
+        // Bearbeiten wie in einer DAW
+        using SE = K55Processor::SampleEdit;
+        struct EB { juce::TextButton* b; SE op; const char* tip; };
+        for (auto& x : { EB { &trimBtn,  SE::trim,      "Nur die Auswahl behalten (Rest wegschneiden)" },
+                         EB { &cutBtn,   SE::cut,       "Auswahl herausschneiden, der Rest rueckt zusammen (Taste Entf)" },
+                         EB { &muteBtn,  SE::silence,   "Auswahl stumm schalten" },
+                         EB { &fadeInBtn, SE::fadeIn,   "Auswahl einblenden" },
+                         EB { &fadeOutBtn, SE::fadeOut, "Auswahl ausblenden" },
+                         EB { &normBtn,  SE::normalize, "Auswahl (oder ganzes Sample) auf volle Lautstaerke bringen (-0,3 dB Spitze)" },
+                         EB { &revBtn,   SE::reverse,   "Auswahl (oder ganzes Sample) rueckwaerts" } })
+        {
+            addAndMakeVisible (x.b);
+            x.b->setTooltip (ParamChoices::u8 (x.tip));
+            const auto op = x.op;
+            x.b->onClick = [this, op] { wave.edit (op); wave.grabKeyboardFocus(); updateEditButtons(); };
+        }
+        for (auto* b : { &undoBtn, &redoBtn, &zoomOutBtn, &zoomInBtn, &zoomAllBtn, &selToMarkBtn })
+            addAndMakeVisible (b);
+        undoBtn.setTooltip (ParamChoices::u8 ("R\xc3\xbc" "ckg\xc3\xa4ngig (Cmd/Strg + Z)"));
+        redoBtn.setTooltip ("Wiederholen (Cmd/Strg + Shift + Z)");
+        zoomInBtn.setTooltip ("Hineinzoomen (auch Mausrad / Trackpad)");
+        zoomOutBtn.setTooltip ("Herauszoomen");
+        zoomAllBtn.setTooltip ("Ganzes Sample zeigen; mit Auswahl: auf die Auswahl zoomen");
+        selToMarkBtn.setTooltip ("Start- und End-Marke auf die Auswahl setzen (das Sample bleibt unveraendert)");
+        undoBtn.onClick     = [this] { wave.undo(); updateEditButtons(); };
+        redoBtn.onClick     = [this] { wave.redo(); updateEditButtons(); };
+        zoomInBtn.onClick   = [this] { wave.zoomBy (0.5); };
+        zoomOutBtn.onClick  = [this] { wave.zoomBy (2.0); };
+        zoomAllBtn.onClick  = [this] { if (wave.hasSelection() && ! wave.isZoomed()) wave.zoomToSelection(); else wave.zoomAll(); };
+        selToMarkBtn.onClick= [this] { wave.markersFromSelection(); };
+        wave.onStateChanged = [this] { updateEditButtons(); };
+        for (auto* b : { &trimBtn, &cutBtn, &muteBtn, &fadeInBtn, &fadeOutBtn, &normBtn, &revBtn, &zoomAllBtn, &selToMarkBtn })
+            b->getProperties().set ("fontSize", 8.0f);
+        for (auto* b : { &undoBtn, &redoBtn, &zoomOutBtn, &zoomInBtn })
+            b->getProperties().set ("fontSize", 15.0f);
 
         inMode  = &choice (ParamID::inMode, "Eingang");
         inGain  = &knob (ParamID::inGain, "Gain", true);
@@ -318,16 +677,31 @@ public:
             clearBtn.setBounds (row.removeFromLeft (76));
             recInfo = row.reduced (10, 0);
             a.removeFromTop (8);
-            wave.setBounds (a.removeFromTop (150));
-            a.removeFromTop (8);
+            wave.setBounds (a.removeFromTop (138));
+            a.removeFromTop (6);
+            {
+                auto er = a.removeFromTop (24);
+                auto put = [&er] (juce::Component& c, int w) { c.setBounds (er.removeFromLeft (w)); er.removeFromLeft (4); };
+                put (trimBtn, 80); put (cutBtn, 58); put (muteBtn, 50); put (fadeInBtn, 56); put (fadeOutBtn, 64);
+                put (normBtn, 44); put (revBtn, 50);
+                auto right = er;
+                zoomAllBtn.setBounds (right.removeFromRight (50)); right.removeFromRight (4);
+                zoomInBtn.setBounds (right.removeFromRight (26));  right.removeFromRight (4);
+                zoomOutBtn.setBounds (right.removeFromRight (26)); right.removeFromRight (8);
+                redoBtn.setBounds (right.removeFromRight (28));    right.removeFromRight (4);
+                undoBtn.setBounds (right.removeFromRight (28));
+                selToMarkBtn.setBounds (right.removeFromLeft (juce::jmax (0, right.getWidth() - 8)));
+            }
+            a.removeFromTop (4);
             row = a.removeFromTop (cellH);
-            const int cw = 70;
+            const int cw = 66;
             place (*start,  row.removeFromLeft (cw));
             place (*end,    row.removeFromLeft (cw));
-            place (*loop,   row.removeFromLeft (110));
+            place (*loop,   row.removeFromLeft (104));
             place (*loopSt, row.removeFromLeft (cw));
-            place (*root,   row.removeFromLeft (cw + 10));
-            row.removeFromLeft (10);
+            place (*root,   row.removeFromLeft (cw + 6));
+            place (*volume, row.removeFromLeft (cw + 6));
+            row.removeFromLeft (8);
             auto tg = row.removeFromLeft (120).withTrimmedTop (14);
             keyTrk->b.setBounds (tg.removeFromTop (26));
             tg.removeFromTop (8);
@@ -380,8 +754,9 @@ public:
         g.drawText (recText(), recInfo, juce::Justification::centredLeft);
 
         drawHint (g, hint, ParamChoices::u8 (
-            "SO SPIELST DU DAS SAMPLE: AUF DER SYNTH-SEITE BEI EINEM OSZILLATOR \xc2\xbbSAMPLE\xc2\xab W\xc3\x84HLEN (ODER EIN PRESET AUS \xc2\xbbSAMPLE\xc2\xab). "
-            "KEY TRACK AN = CHROMATISCH \xc3\x9c" "BER DIE TASTATUR, AUS = LOOP/ONE-SHOT IN ORIGINALTONH\xc3\x96HE. MARKEN S / E / LOOP MIT DER MAUS ZIEHEN."));
+            "SPIELEN: AUF DER SYNTH-SEITE BEI EINEM OSZILLATOR \xc2\xbbSAMPLE\xc2\xab W\xc3\x84HLEN. "
+            "MARKEN S / E / LOOP ZIEHEN, SONST ZIEHEN = AUSWAHL (DOPPELKLICK = ALLES). MAUSRAD / TRACKPAD = ZOOM, SEITLICH WISCHEN = VERSCHIEBEN. "
+            "SCHNITTE LANDEN AUF NULLDURCHG\xc3\x84NGEN, DAS ORIGINAL BLEIBT ERHALTEN (\xc2\xbb(BEARBEITET)\xc2\xab IM ORDNER K-54 S SAMPLES)."));
         if (rightPage == 1)
         drawHint (g, hintWt, proc.hasAudioInput()
             ? ParamChoices::u8 ("TABELLE \xc2\xbbUSER\xc2\xab = DEINE EIGENE WAVETABLE (DATEI ODER \xc2\xbb\xe2\x86\x92 WAVETABLE\xc2\xab). IN LOGIC DEN EINGANG \xc3\x9c" "BER \xc2\xbbSIDECHAIN\xc2\xab OBEN IM PLUG-IN-FENSTER W\xc3\x84HLEN.")
@@ -441,6 +816,7 @@ private:
         const bool hasSample = proc.getSample() != nullptr;
         toWtBtn.setEnabled (hasSample);
         clearBtn.setEnabled (hasSample);
+        if (hasSample != lastHasSample) { lastHasSample = hasSample; updateEditButtons(); }
         recBtn.setEnabled (proc.hasAudioInput());
         inMeter.setLevels (proc.inPeak[0].exchange (0.0f), proc.inPeak[1].exchange (0.0f));
         if (st != lastRec || st == K55Processor::recRunning || st == K55Processor::recArmed) { lastRec = st; repaint (recInfo); }
@@ -460,8 +836,24 @@ private:
         if (isShowing()) wave.repaint();
     }
 
+    void updateEditButtons()
+    {
+        const bool has = proc.getSample() != nullptr, sel = has && wave.hasSelection();
+        for (auto* b : { &trimBtn, &cutBtn, &muteBtn, &fadeInBtn, &fadeOutBtn, &selToMarkBtn }) b->setEnabled (sel);
+        for (auto* b : { &normBtn, &revBtn, &zoomInBtn, &zoomOutBtn, &zoomAllBtn }) b->setEnabled (has);
+        undoBtn.setEnabled (proc.canUndoSampleEdit());
+        redoBtn.setEnabled (proc.canRedoSampleEdit());
+        zoomAllBtn.setButtonText (sel && ! wave.isZoomed() ? "AUSW." : "ALLES");
+    }
+
     SampleWaveView wave;
     WavetableView wtView;
+    juce::TextButton trimBtn { "ZUSCHNEIDEN" }, cutBtn { ParamChoices::u8 ("L\xc3\x96SCHEN") }, muteBtn { "STILLE" },
+                     fadeInBtn { "FADE IN" }, fadeOutBtn { "FADE OUT" }, normBtn { "NORM" }, revBtn { ParamChoices::u8 ("\xe2\x87\x86 REV") },
+                     undoBtn { ParamChoices::u8 ("\xe2\x86\xb6") }, redoBtn { ParamChoices::u8 ("\xe2\x86\xb7") },
+                     zoomOutBtn { ParamChoices::u8 ("\xe2\x88\x92") }, zoomInBtn { "+" }, zoomAllBtn { "ALLES" },
+                     selToMarkBtn { "S/E SETZEN" };
+    bool lastHasSample = false;
     MiniMeter inMeter;
     juce::TextButton loadBtn { "LADEN" }, recBtn { ParamChoices::u8 ("\xe2\x97\x8f REC") }, stopBtn { "STOP" }, toWtBtn { ParamChoices::u8 ("\xe2\x86\x92 WAVETABLE") },
                      clearBtn { "LEEREN" }, wtLoadBtn { "WT LADEN" }, osc1Btn { "OSC 1" }, osc2Btn { "OSC 2" }, osc3Btn { "OSC 3" };
@@ -470,7 +862,7 @@ private:
     juce::String lastError;
     int viewOsc = 0, lastRec = -1, lastSource = -1, lastWtSource = -1;
 
-    Knob *start = nullptr, *end = nullptr, *loopSt = nullptr, *root = nullptr, *inGain = nullptr;
+    Knob *start = nullptr, *end = nullptr, *loopSt = nullptr, *root = nullptr, *inGain = nullptr, *volume = nullptr;
     Choice *loop = nullptr, *inMode = nullptr;
     Toggle *keyTrk = nullptr, *oneShot = nullptr, *inAuto = nullptr, *inMon = nullptr;
     juce::Rectangle<int> secSample, secRight, subIn, subWt, recInfo, hint, hintWt;

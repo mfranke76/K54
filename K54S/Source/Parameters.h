@@ -84,6 +84,7 @@ namespace ParamID
     inline constexpr const char* smpLoopStart = "smpLoopStart";
     inline constexpr const char* smpKeyTrack  = "smpKeyTrack";
     inline constexpr const char* smpOneShot   = "smpOneShot";
+    inline constexpr const char* smpGain      = "smpGain";
     // Eingang (Aufnahme) + Ausgang – gehoeren nicht zum Preset
     inline constexpr const char* inMode     = "inMode";
     inline constexpr const char* inGain     = "inGain";
@@ -294,6 +295,7 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     p.push_back (std::make_unique<P> (ParameterID { ParamID::smpLoopStart, v }, "Loop Start",   unit(), 0.0f, pct));
     p.push_back (std::make_unique<B> (ParameterID { ParamID::smpKeyTrack, v },  "Sample Key Track", true));
     p.push_back (std::make_unique<B> (ParameterID { ParamID::smpOneShot, v },   "Sample One-Shot", false));
+    p.push_back (std::make_unique<P> (ParameterID { ParamID::smpGain, v },      "Sample Volume", NormalisableRange<float> (-24.0f, 24.0f), 0.0f, dbA));
     // Eingang / Ausgang
     p.push_back (std::make_unique<C> (ParameterID { ParamID::inMode, v },    "Input Mode", ParamChoices::inputModes, 0));
     p.push_back (std::make_unique<P> (ParameterID { ParamID::inGain, v },    "Input Gain", NormalisableRange<float> (-24.0f, 24.0f), 0.0f, dbA));

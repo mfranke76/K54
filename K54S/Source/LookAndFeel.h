@@ -220,7 +220,12 @@ public:
     juce::Font getComboBoxFont (juce::ComboBox&) override   { return K54Fonts::make (K54Fonts::syncopate(), 9.5f, 0.02f); }
     juce::Font getPopupMenuFont() override                   { return K54Fonts::make (K54Fonts::syncopate(), 11.0f, 0.02f); }
     juce::Font getLabelFont (juce::Label& l) override        { return l.getFont(); }
-    juce::Font getTextButtonFont (juce::TextButton&, int) override { return K54Fonts::make (K54Fonts::syncopateBold(), 10.0f, 0.12f); }
+    juce::Font getTextButtonFont (juce::TextButton& b, int) override
+    {
+        // einzelne Knoepfe koennen eine eigene Schriftgroesse haben (Property "fontSize")
+        const float size = b.getProperties().contains ("fontSize") ? (float) b.getProperties()["fontSize"] : 10.0f;
+        return K54Fonts::make (K54Fonts::syncopateBold(), size, size > 12.0f ? 0.0f : (size < 9.5f ? 0.04f : 0.12f));
+    }
     juce::Font getAlertWindowMessageFont() override          { return K54Fonts::make (K54Fonts::syncopate(), 12.0f); }
     juce::Font getAlertWindowTitleFont() override            { return K54Fonts::make (K54Fonts::syncopateBold(), 14.0f, 0.1f); }
 

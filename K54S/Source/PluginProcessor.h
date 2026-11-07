@@ -49,6 +49,17 @@ public:
     void sampleToWavetable();
     void clearSample();
     std::shared_ptr<SampleData> getSample() const { return sample; }
+
+    // ---- Sample-Editor (wie in einer DAW, nur Message-Thread)
+    //      a, b = Auswahl als Anteil der Sample-Laenge (0..1); ohne Auswahl a == b
+    enum class SampleEdit { trim, cut, silence, fadeIn, fadeOut, normalize, reverse };
+    bool editSample (SampleEdit op, double a, double b);
+    static bool editNeedsSelection (SampleEdit op) { return op == SampleEdit::trim || op == SampleEdit::cut || op == SampleEdit::silence || op == SampleEdit::fadeIn || op == SampleEdit::fadeOut; }
+    bool undoSampleEdit();
+    bool redoSampleEdit();
+    bool canUndoSampleEdit() const { return ! undoStack.empty(); }
+    bool canRedoSampleEdit() const { return ! redoStack.empty(); }
+    std::atomic<int> editVersion { 0 };                // zaehlt Bearbeitungen (Ansicht bleibt dann stehen)
     std::shared_ptr<Wavetable>  getUserWavetable() const { return userWT; }
     const Wavetable* getTableForDisplay (int index) const;
     juce::AudioFormatManager formats;
@@ -92,6 +103,12 @@ private:
     void finishRecording();
     void restoreSources (const juce::ValueTree& tree);
     void writeSourceInfo (juce::ValueTree& tree) const;
+    void applyEditedSample (std::shared_ptr<SampleData> s, bool resetMarkers);
+    static bool writeWavFile (const juce::File& f, const juce::AudioBuffer<float>& audio, double sr);
+    static bool isEditFile (const juce::File& f);
+    std::vector<std::shared_ptr<SampleData>> undoStack, redoStack;
+    juce::File editFile;                                // bearbeitete Fassung des aktuellen Samples
+    static constexpr size_t maxUndo = 12;
 
     SynthEngine engine;
     SynthParams sp;
