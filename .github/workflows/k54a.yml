@@ -1,0 +1,99 @@
+# K-54 Analyzer automatisch fuer Windows und macOS bauen.
+# Start: bei jedem Push auf "main", der etwas im Ordner K54A/ aendert, oder per Hand
+#        (Actions > K-54 Analyzer bauen > Run workflow).
+# Ergebnis: unter Actions > Lauf > "Artifacts":  K-54-Analyzer-Windows (Setup.exe)  und  K-54-Analyzer-macOS (DMG)
+# Ausserdem als Beta-Release (prerelease, nie "latest") "k54a-v<Version aus K54A/CMakeLists.txt>".
+name: K-54 Analyzer bauen
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - "K54A/**"
+      - ".github/workflows/k54a.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+defaults:
+  run:
+    working-directory: K54A
+
+jobs:
+  tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pakete
+        run: sudo apt-get update -q && sudo apt-get install -y -q libasound2-dev libxrandr-dev libxinerama-dev libxcursor-dev libxext-dev libfreetype-dev libfontconfig1-dev ninja-build xvfb
+      - name: Tests bauen
+        run: |
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DK54A_BUILD_TESTS=ON
+          cmake --build build --target K54ATest
+      - name: Tests ausfuehren (EBU R128, A/B, Referenz)
+        run: xvfb-run -a ./build/K54ATest_artefacts/Release/K54ATest out
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Konfigurieren (Visual Studio, x64)
+        run: cmake -B build -A x64
+      - name: Kompilieren
+        run: cmake --build build --config Release --parallel --target K54Analyzer_VST3 K54Analyzer_Standalone
+      - name: Version lesen
+        id: ver
+        shell: pwsh
+        run: |
+          $v = (Select-String -Path CMakeLists.txt -Pattern 'project\(K54A VERSION ([0-9.]+)').Matches[0].Groups[1].Value
+          "version=$v" >> $env:GITHUB_OUTPUT
+      - name: Installer bauen (Inno Setup)
+        shell: pwsh
+        run: |
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /DAppVersion=${{ steps.ver.outputs.version }} "/DBuildDir=$env:GITHUB_WORKSPACE\K54A\build\K54Analyzer_artefacts\Release" Installer\windows\K54A.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: K-54-Analyzer-Windows
+          path: K54A/dist/*.exe
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: k54a-v${{ steps.ver.outputs.version }}
+          name: K-54 Analyzer ${{ steps.ver.outputs.version }}
+          target_commitish: ${{ github.sha }}
+          body_path: K54A/RELEASE_NOTES.md
+          prerelease: true
+          make_latest: false
+          files: K54A/dist/*.exe
+
+  macos:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: "DMG bauen (Universal: Apple Silicon + Intel)"
+        run: |
+          chmod +x make-installer.sh
+          sed -i '' 's/^open -R.*$//' make-installer.sh
+          ./make-installer.sh
+          mkdir -p dist
+          for f in K-54\ Analyzer-*-Installer.dmg; do mv "$f" "dist/${f// /-}"; done
+          ls -la dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: K-54-Analyzer-macOS
+          path: K54A/dist/*.dmg
+      - name: Version lesen
+        id: ver
+        run: echo "version=$(sed -nE 's/^project\(K54A VERSION ([0-9.]+).*/\1/p' CMakeLists.txt)" >> "$GITHUB_OUTPUT"
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: k54a-v${{ steps.ver.outputs.version }}
+          name: K-54 Analyzer ${{ steps.ver.outputs.version }}
+          target_commitish: ${{ github.sha }}
+          body_path: K54A/RELEASE_NOTES.md
+          prerelease: true
+          make_latest: false
+          files: K54A/dist/*.dmg

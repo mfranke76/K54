@@ -12,6 +12,8 @@ on:
     paths-ignore:
       - "K54S/**"
       - ".github/workflows/k54s.yml"
+      - "K54A/**"
+      - ".github/workflows/k54a.yml"
   workflow_dispatch:
 
 permissions:
