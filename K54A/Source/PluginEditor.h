@@ -50,7 +50,7 @@ struct Readouts
 {
     float mixM = -100, mixS = -100, mixI = -100, mixLra = 0, mixTp = -100, mixSMax = -100, mixMMax = -100;
     float refM = -100, refS = -100, refI = -100, refLra = 0, refTp = -100, refSMax = -100, refMMax = -100;
-    bool refLoaded = false, refRunning = false;
+    bool refLoaded = false, refRunning = false, refLive = false;
     float target = 1000.0f;  // 1000 = kein Ziel
     float tpLimit = -1.0f;
 };
@@ -142,7 +142,7 @@ class TonalView : public juce::Component
 public:
     void paint (juce::Graphics&) override;
     std::array<float, SpecMath::numBands> mix {}, ref {};
-    bool mixValid = false, refValid = false, refLoaded = false, pro = false;
+    bool mixValid = false, refValid = false, refLoaded = false, refLive = false, pro = false;
     double mixSeconds = 0.0;
     juce::String channelNote;
 };
@@ -214,6 +214,7 @@ private:
     juce::TextButton btnShowMix, btnShowRef, btnShowDiff, btnHold;
     juce::TextButton btnLoad, btnClear, btnSync, btnPlay, btnMatch;
     std::array<juce::TextButton, AnalyzerProcessor::numSlots> btnSlot;
+    juce::TextButton btnLive;
     juce::Slider sGain;
     juce::Label lbSlope, lbSpeed, lbSmooth, lbRes, lbChannel, lbGain, lbTarget, lbMonitor;
 

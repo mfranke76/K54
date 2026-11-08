@@ -131,7 +131,8 @@ class AnalyzerProcessor : public juce::AudioProcessor,
                           private juce::Timer
 {
 public:
-    static constexpr int numSlots = 4;
+    static constexpr int numSlots = 4;       // Datei-Slots 1–4
+    static constexpr int liveSlot = 4;       // Slot 5 = Live-Referenz über Sidechain
     enum RefStatus { refEmpty = 0, refLoading, refReady, refError };
 
     AnalyzerProcessor();
@@ -175,7 +176,14 @@ public:
     bool isFreePlaying() const noexcept { return freePlaying.load(); }
 
     RefData* getRef() const noexcept { return getRef (currentSlot()); }
-    RefData* getRef (int slot) const noexcept { return refs[(size_t) juce::jlimit (0, numSlots - 1, slot)].load (std::memory_order_acquire); }
+    RefData* getRef (int slot) const noexcept
+    {
+        return slot >= 0 && slot < numSlots ? refs[(size_t) slot].load (std::memory_order_acquire) : nullptr;
+    }
+    bool isLiveSlot() const noexcept { return currentSlot() == liveSlot; }
+    bool isLiveConnected() const noexcept { return liveConnected.load(); }
+    bool hasLiveSignal() const noexcept { return liveSignal.load(); }
+    bool hasReference() const noexcept { return isLiveSlot() ? isLiveConnected() : getRef() != nullptr; }
     int getRefVersion() const noexcept { return refVersion.load(); }
     int getRefStatus() const noexcept { return refStatus.load(); }
     int getLoadingSlot() const noexcept { return loadingSlot.load(); }
@@ -209,7 +217,8 @@ public:
 private:
     class Loader;
     void timerCallback() override;
-    void processChunk (float* L, float* R, bool stereo, int n, bool playing, int64_t dawPos);
+    void processChunk (float* L, float* R, bool stereo, int n, bool playing, int64_t dawPos,
+                       const float* scL, const float* scR);
     void applyMonitoring (float* L, float* R, bool stereo, int n);
     void setStatus (int s, const juce::String& msg);
     void trashRef (RefData* r);
@@ -230,7 +239,8 @@ private:
 
     std::atomic<double> hostRate { 0.0 };
     std::atomic<int64_t> seekRequest { -1 };
-    std::atomic<bool> freePlaying { false }, refRunning { false }, hostPlaying { false }, resetRequested { false };
+    std::atomic<bool> freePlaying { false }, refRunning { false }, hostPlaying { false }, resetRequested { false },
+                      liveConnected { false }, liveSignal { false };
     std::atomic<double> refPosSeconds { 0.0 };
     std::atomic<float> matchGainDb { 0.0f }, uiScale { 0.85f };
 

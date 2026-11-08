@@ -113,14 +113,15 @@ juce::AudioProcessorValueTreeState::ParameterLayout AnalyzerProcessor::createLay
                                                    StringArray { "Voller Bereich", "Bass < 150 Hz",
                                                                  u8 ("Mitten 150 Hz – 5 kHz"), u8 ("Höhen > 5 kHz") }, 0));
     l.add (std::make_unique<AudioParameterChoice> (ParameterID { "refSlot", 2 }, "Referenz-Slot",
-                                                   StringArray { "1", "2", "3", "4" }, 0));
+                                                   StringArray { "1", "2", "3", "4", "Live (Sidechain)" }, 0));
     return l;
 }
 
 AnalyzerProcessor::AnalyzerProcessor()
     : AudioProcessor (BusesProperties()
                           .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
-                          .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
+                          .withOutput ("Output", juce::AudioChannelSet::stereo(), true)
+                          .withInput  ("Sidechain", juce::AudioChannelSet::stereo(), false)),
       apvts (*this, nullptr, "K54A", createLayout())
 {
     formatManager.registerBasicFormats();
@@ -184,7 +185,7 @@ void AnalyzerProcessor::setProMode (bool pro)
 
 int AnalyzerProcessor::currentSlot() const noexcept
 {
-    return juce::jlimit (0, numSlots - 1, (int) std::lround (pSlot->load()));
+    return juce::jlimit (0, liveSlot, (int) std::lround (pSlot->load()));
 }
 
 void AnalyzerProcessor::setSlot (int slot)
@@ -192,7 +193,7 @@ void AnalyzerProcessor::setSlot (int slot)
     if (auto* prm = apvts.getParameter ("refSlot"))
     {
         prm->beginChangeGesture();
-        prm->setValueNotifyingHost (prm->convertTo0to1 ((float) juce::jlimit (0, numSlots - 1, slot)));
+        prm->setValueNotifyingHost (prm->convertTo0to1 ((float) juce::jlimit (0, liveSlot, slot)));
         prm->endChangeGesture();
     }
     ++refVersion;
@@ -213,7 +214,15 @@ bool AnalyzerProcessor::isBusesLayoutSupported (const BusesLayout& layouts) cons
     const auto out = layouts.getMainOutputChannelSet();
     if (out != juce::AudioChannelSet::mono() && out != juce::AudioChannelSet::stereo())
         return false;
-    return layouts.getMainInputChannelSet() == out;
+    if (layouts.getMainInputChannelSet() != out)
+        return false;
+    if (layouts.inputBuses.size() > 1)
+    {
+        const auto sc = layouts.getChannelSet (true, 1);
+        if (! sc.isDisabled() && sc != juce::AudioChannelSet::mono() && sc != juce::AudioChannelSet::stereo())
+            return false;
+    }
+    return true;
 }
 
 void AnalyzerProcessor::prepareToPlay (double sampleRate, int)
@@ -264,14 +273,27 @@ void AnalyzerProcessor::prepareToPlay (double sampleRate, int)
 void AnalyzerProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
 {
     juce::ScopedNoDenormals noDenormals;
-    const int numIn = getTotalNumInputChannels();
+    const int numIn = juce::jmin (getMainBusNumInputChannels(), buffer.getNumChannels());
     const int n = buffer.getNumSamples();
-
-    for (int ch = numIn; ch < getTotalNumOutputChannels(); ++ch)
-        buffer.clear (ch, 0, n);
 
     if (n <= 0 || numIn <= 0)
         return;
+
+    // Sidechain (Live-Referenz)
+    const float* scL = nullptr;
+    const float* scR = nullptr;
+    if (getBusCount (true) > 1)
+        if (auto* bus = getBus (true, 1))
+            if (bus->isEnabled() && bus->getNumberOfChannels() > 0)
+            {
+                auto sc = getBusBuffer (buffer, true, 1);
+                if (sc.getNumChannels() > 0)
+                {
+                    scL = sc.getReadPointer (0);
+                    scR = sc.getNumChannels() > 1 ? sc.getReadPointer (1) : scL;
+                }
+            }
+    liveConnected.store (scL != nullptr);
 
     bool playing = false;
     int64_t dawPos = -1;
@@ -312,7 +334,7 @@ void AnalyzerProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mi
 
     const int want = currentSlot();
     const int64_t seek = seekRequest.exchange (-1);
-    if (seek >= 0)
+    if (seek >= 0 && want < numSlots)
     {
         if (pSync->load() > 0.5f) refOffset[(size_t) want].store (seek - lastDawPos);
         else                      freePos[(size_t) want] = seek;
@@ -325,7 +347,8 @@ void AnalyzerProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mi
         const int m = juce::jmin (n - done, scratchSize);
         float* L = buffer.getWritePointer (0, done);
         float* R = stereo ? buffer.getWritePointer (1, done) : L;
-        processChunk (L, R, stereo, m, playing, dawPos >= 0 ? dawPos + done : -1);
+        processChunk (L, R, stereo, m, playing, dawPos >= 0 ? dawPos + done : -1,
+                      scL != nullptr ? scL + done : nullptr, scR != nullptr ? scR + done : nullptr);
         applyMonitoring (L, R, stereo, m);
         done += m;
     }
@@ -343,7 +366,8 @@ void AnalyzerProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mi
     }
 }
 
-void AnalyzerProcessor::processChunk (float* L, float* R, bool stereo, int n, bool playing, int64_t dawPos)
+void AnalyzerProcessor::processChunk (float* L, float* R, bool stereo, int n, bool playing, int64_t dawPos,
+                                      const float* scL, const float* scR)
 {
     // ---- Mix messen -------------------------------------------------------
     mixMeter.process (L, stereo ? R : nullptr, n);
@@ -352,7 +376,8 @@ void AnalyzerProcessor::processChunk (float* L, float* R, bool stereo, int n, bo
 
     // ---- Slot-Wechsel: alte Referenz kurz ausblenden, dann umschalten -----
     const int want = currentSlot();
-    if (want != audioSlot && getRef (audioSlot) == nullptr)
+    auto available = [&] (int s) { return s == liveSlot ? scL != nullptr : getRef (s) != nullptr; };
+    if (want != audioSlot && ! available (audioSlot))
     {
         audioSlot = want;
         slotFade = 0.0f;
@@ -368,7 +393,26 @@ void AnalyzerProcessor::processChunk (float* L, float* R, bool stereo, int n, bo
     float* rr = refR.data();
     bool active = false;
 
-    if (ref != nullptr && ref->length() > 0)
+    const bool live = audioSlot == liveSlot;
+
+    if (live)
+    {
+        if (scL != nullptr)
+        {
+            active = true;
+            float pk = 0.0f;
+            for (int i = 0; i < n; ++i)
+            {
+                rl[i] = scL[i];
+                rr[i] = scR[i];
+                pk = juce::jmax (pk, std::abs (rl[i]), std::abs (rr[i]));
+            }
+            liveSignal.store (pk > 1.0e-5f);
+        }
+        else
+            liveSignal.store (false);
+    }
+    else if (ref != nullptr && ref->length() > 0)
     {
         const int64_t len = ref->length();
         const float* srcL = ref->audio.getReadPointer (0);
@@ -410,12 +454,15 @@ void AnalyzerProcessor::processChunk (float* L, float* R, bool stereo, int n, bo
     if (matchCounter >= (int) (sr * 0.1))
     {
         matchCounter = 0;
-        if (ref != nullptr && ref->integrated > -70.0f)
+        const float refLoudness = ref != nullptr ? ref->integrated
+                                : (live ? (refMeter.hasIntegrated() ? refMeter.integrated() : refMeter.shortTerm())
+                                        : LoudnessMeter::silent);
+        if (refLoudness > -70.0f)
         {
             const float mixL = mixMeter.hasIntegrated() ? mixMeter.integrated() : mixMeter.shortTerm();
             if (mixL > -60.0f)
             {
-                const float target = juce::jlimit (-30.0f, 30.0f, mixL - ref->integrated);
+                const float target = juce::jlimit (-30.0f, 30.0f, mixL - refLoudness);
                 const float cur = matchGainDb.load();
                 matchGainDb.store (matchInit ? cur + 0.35f * (target - cur) : target);
                 matchInit = true;
@@ -459,7 +506,7 @@ void AnalyzerProcessor::processChunk (float* L, float* R, bool stereo, int n, bo
     }
 
     // ---- A/B mit kurzer Überblendung --------------------------------------
-    const float targetAB = (pAB->load() > 0.5f && (ref != nullptr || getRef (want) != nullptr)) ? 1.0f : 0.0f;
+    const float targetAB = (pAB->load() > 0.5f && (available (audioSlot) || available (want))) ? 1.0f : 0.0f;
     const float step = (float) (1.0 / (0.015 * sr));
 
     if (targetAB <= 0.0f && abPos <= 0.0f)
@@ -534,6 +581,7 @@ void AnalyzerProcessor::setStatus (int s, const juce::String& msg)
 
 void AnalyzerProcessor::loadReference (const juce::File& file, int slot)
 {
+    if (slot >= numSlots) slot = 0;   // LIVE-Slot nimmt keine Dateien
     slot = juce::jlimit (0, numSlots - 1, slot);
     if (! file.existsAsFile())
     {
@@ -564,7 +612,7 @@ void AnalyzerProcessor::trashRef (RefData* r)
 
 void AnalyzerProcessor::clearReference (int slot)
 {
-    slot = juce::jlimit (0, numSlots - 1, slot);
+    if (slot < 0 || slot >= numSlots) return;
     trashRef (refs[(size_t) slot].exchange (nullptr));
     {
         const juce::ScopedLock sl (pendingLock);

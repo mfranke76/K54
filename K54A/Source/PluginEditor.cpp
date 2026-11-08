@@ -461,8 +461,9 @@ void LoudnessPanel::paint (juce::Graphics& g)
 
     g.setColour (col::dim);
     g.setFont (font (10.5f));
-    g.drawText (u8s ("Referenz: Integrated, Max, LRA, TP = ganze Datei"), juce::Rectangle<float> (10, y + 4, w - 20, 14),
-                juce::Justification::centredLeft);
+    g.drawText (r.refLive ? u8s ("Referenz LIVE: gemessen seit dem letzten Reset")
+                          : u8s ("Referenz: Integrated, Max, LRA, TP = ganze Datei"),
+                juce::Rectangle<float> (10, y + 4, w - 20, 14), juce::Justification::centredLeft);
 
     if (pro)
         return;
@@ -826,8 +827,10 @@ void TonalView::paint (juce::Graphics& g)
     {
         g.setColour (col::text.withAlpha (0.75f));
         g.setFont (font (13.0f, true));
-        g.drawFittedText (u8s ("Lade unten eine Referenz – dann zeigt dir dieses Feld, wo dein Mix mehr oder weniger "
-                               "Bass, Mitten oder Höhen hat als der Song, an dem du dich orientierst."),
+        g.drawFittedText (refLive ? u8s ("LIVE-Referenz: Noch kein Sidechain-Signal. Wähle in deiner DAW eine Spur oder einen "
+                                         "Eingang als Sidechain für den K-54 Analyzer.")
+                                  : u8s ("Lade unten eine Referenz – dann zeigt dir dieses Feld, wo dein Mix mehr oder weniger "
+                                         "Bass, Mitten oder Höhen hat als der Song, an dem du dich orientierst."),
                           b.reduced (20.0f, 10.0f).toNearestInt(), juce::Justification::centred, 4);
         return;
     }
@@ -873,7 +876,7 @@ void TonalView::paint (juce::Graphics& g)
     g.drawText (tip, b.reduced (10.0f, 4.0f).withHeight (18.0f), juce::Justification::centredLeft);
     g.setFont (font (10.0f));
     g.setColour (col::dim);
-    juce::String meas = u8s ("Mix ") + mmss (mixSeconds) + u8s (" · Ref: ganzer Song");
+    juce::String meas = u8s ("Mix ") + mmss (mixSeconds) + (refLive ? u8s (" · Ref: live") : u8s (" · Ref: ganzer Song"));
     if (channelNote.isNotEmpty()) meas = channelNote;
     g.drawText (meas, b.reduced (10.0f, 4.0f).withHeight (18.0f), juce::Justification::centredRight);
 
@@ -936,6 +939,39 @@ void WaveView::paint (juce::Graphics& g)
     auto b = getLocalBounds().toFloat();
     g.setColour (col::plot);
     g.fillRoundedRectangle (b, 4.0f);
+
+    if (proc.isLiveSlot())
+    {
+        const bool conn = proc.isLiveConnected();
+        const bool sig = conn && proc.hasLiveSignal();
+        g.setColour (sig ? col::ref : col::line.brighter (0.3f));
+        g.drawRoundedRectangle (b.reduced (1.0f), 4.0f, sig ? 2.0f : 1.2f);
+
+        auto r = b.reduced (14.0f, 8.0f);
+        g.setFont (font (15.0f, true));
+        g.setColour (sig ? col::ref : col::text);
+        const float pulse = sig ? 0.6f + 0.4f * (float) std::sin (juce::Time::getMillisecondCounter() * 0.006) : 0.25f;
+        g.setColour ((sig ? col::red : col::dim).withAlpha (pulse));
+        g.fillEllipse (r.getX(), r.getY() + 5.0f, 10.0f, 10.0f);
+        g.setColour (sig ? col::ref : col::text);
+        g.drawText (u8s ("LIVE-REFERENZ  ·  Sidechain"), r.withTrimmedLeft (16.0f).withHeight (20.0f), juce::Justification::centredLeft);
+
+        g.setFont (font (12.5f, true));
+        g.setColour (sig ? col::good : (conn ? col::goldHi : col::warn));
+        g.drawText (sig ? u8s ("Signal da – wird live gemessen, nichts wird aufgenommen")
+                        : (conn ? u8s ("Sidechain verbunden – warte auf Signal") : u8s ("Kein Sidechain verbunden")),
+                    r.withHeight (20.0f), juce::Justification::centredRight);
+
+        g.setFont (font (12.0f));
+        g.setColour (col::text.withAlpha (0.8f));
+        g.drawFittedText (u8s ("Logic: oben rechts im Plugin-Fenster bei „Side Chain“ eine Spur, einen Bus oder einen Eingang wählen.\n"
+                               "Ableton: im Gerät den Sidechain-Bereich aufklappen und die Quelle wählen.  "
+                               "Cubase: im Plugin-Fenster Sidechain aktivieren und eine Spur dorthin senden.\n"
+                               "Andere Programme (z. B. Streaming-App) über ein virtuelles Audiogerät wie BlackHole in die DAW holen – "
+                               "nur live messen, nicht aufnehmen."),
+                          r.withTrimmedTop (26.0f).toNearestInt(), juce::Justification::topLeft, 4, 1.0f);
+        return;
+    }
 
     auto* ref = proc.getRef();
     const int status = proc.getRefStatus();
@@ -1043,6 +1079,10 @@ void HelpOverlay::paint (juce::Graphics& g)
     add ("4 Slots (1–4): LADEN oder Dateien ins Fenster ziehen. Oben A (Mix) / B (Referenz). LAUTHEIT ANGLEICHEN macht die "
          "Referenz so laut wie deinen Mix. DAW-SYNC an: Referenz läuft mit der DAW, Klick in die Wellenform setzt die Stelle. "
          "DAW-SYNC aus: PLAY/STOP, Schleife.\n\n", 13.5f, col::text);
+    add ("LIVE-Referenz  ", 13.5f, col::goldHi, true);
+    add ("Slot LIVE misst, was am Sidechain-Eingang ankommt – eine andere Spur, ein externer Player oder eine App über "
+         "ein virtuelles Audiogerät. Alles läuft wie bei einer Datei (A/B, Angleich, Tonale Balance), es wird nichts aufgenommen.\n\n",
+         13.5f, col::text);
     add ("Abhören (PRO)  ", 13.5f, col::goldHi, true);
     add ("Mono, Side oder ein Frequenzbereich solo – für Mix und Referenz. Ist etwas davon aktiv, leuchtet es orange: "
          "vor dem Bouncen wieder auf Stereo / Voller Bereich stellen!\n\n", 13.5f, col::text);
@@ -1159,6 +1199,11 @@ Content::Content (AnalyzerProcessor& p) : proc (p)
         b.onClick = [this, s] { proc.setSlot (s); };
         addAndMakeVisible (b);
     }
+    btnLive.setButtonText ("LIVE");
+    setAccent (btnLive, col::ref);
+    btnLive.setTooltip (u8s ("Live-Referenz über den Sidechain-Eingang"));
+    btnLive.onClick = [this] { proc.setSlot (AnalyzerProcessor::liveSlot); };
+    addAndMakeVisible (btnLive);
     btnLoad.setButtonText (u8s ("LADEN …"));
     btnLoad.onClick = [this] { openFileChooser(); };
     addAndMakeVisible (btnLoad);
@@ -1273,7 +1318,7 @@ void Content::updateVisibility()
 
 void Content::setAB (bool b)
 {
-    if (b && proc.getRef() == nullptr)
+    if (b && ! proc.hasReference())
         b = false;
     setParam ("ab", b ? 1.0f : 0.0f);
     if (b && proc.apvts.getRawParameterValue ("sync")->load() < 0.5f && ! proc.isFreePlaying())
@@ -1314,7 +1359,22 @@ juce::String Content::buildReport() const
     if (r.target < 100.0f && r.mixI > -90.0f)
         s << line (u8s ("Abstand zum Ziel"), fmt (r.mixI - r.target, 1, true) + " LU");
 
-    if (auto* ref = proc.getRef())
+    if (proc.isLiveSlot() && r.refLoaded)
+    {
+        s << "\n" << u8s ("REFERENZ  (LIVE über Sidechain, gemessen seit Reset)\n");
+        s << line ("Integrated", fmt (r.refI) + " LUFS");
+        s << line ("LRA", fmt (r.refLra) + " LU");
+        s << line ("True Peak max", fmt (r.refTp) + " dBTP");
+        s << line ("Short-Term max", fmt (r.refSMax) + " LUFS");
+        if (tonal.mixValid && tonal.refValid)
+        {
+            s << "\n" << u8s ("TONALE BALANCE  (Mix minus Referenz, + = Mix hat mehr)\n");
+            for (int i = 0; i < SpecMath::numBands; ++i)
+                s << line (u8s (SpecMath::bandName (i)) + " (" + u8s (SpecMath::bandRange (i)) + ")",
+                           fmt (tonal.mix[(size_t) i] - tonal.ref[(size_t) i], 1, true) + " dB");
+        }
+    }
+    else if (auto* ref = proc.getRef())
     {
         s << "\n" << u8s ("REFERENZ  (Slot ") << (proc.currentSlot() + 1) << ")\n";
         s << line ("Datei", ref->name);
@@ -1403,10 +1463,11 @@ void Content::resized()
 
     const int rx = rRef.getX(), ry = rRef.getY();
     for (int s = 0; s < AnalyzerProcessor::numSlots; ++s)
-        btnSlot[(size_t) s].setBounds (rx + 12 + s * 34, ry + 32, 30, 28);
-    btnLoad.setBounds (rx + 12, ry + 66, 132, 28);
-    btnClear.setBounds (rx + 12, ry + 100, 132, 24);
-    wave.setBounds (rx + 156, ry + 10, 724, 114);
+        btnSlot[(size_t) s].setBounds (rx + 12 + s * 26, ry + 32, 23, 28);
+    btnLive.setBounds (rx + 116, ry + 32, 44, 28);
+    btnLoad.setBounds (rx + 12, ry + 66, 148, 28);
+    btnClear.setBounds (rx + 12, ry + 100, 148, 24);
+    wave.setBounds (rx + 168, ry + 10, 712, 114);
 
     const int x0 = rLoud.getX();
     btnSync.setBounds (x0, ry + 8, 150, 26);
@@ -1489,8 +1550,8 @@ void Content::paint (juce::Graphics& g)
 
     const bool match = proc.apvts.getRawParameterValue ("match")->load() > 0.5f;
     g.setFont (font (11.5f));
-    g.setColour (match && proc.getRef() != nullptr ? col::text : col::dim);
-    const juce::String m = proc.getRef() == nullptr ? u8s ("–")
+    g.setColour (match && proc.hasReference() ? col::text : col::dim);
+    const juce::String m = ! proc.hasReference() ? u8s ("–")
                          : (match ? u8s ("Angleich ") + fmt (proc.getMatchGainDb(), 1, true) + " dB" : u8s ("aus"));
     g.drawText (m, rLoud.getX() + 198, rRef.getY() + 68, 166, 26, juce::Justification::centredLeft);
 }
@@ -1558,6 +1619,8 @@ void Content::tick()
     const bool hold = vts.getRawParameterValue ("hold")->load() > 0.5f;
 
     auto* ref = proc.getRef();
+    const bool live = proc.isLiveSlot();
+    const bool refPresent = ref != nullptr || (live && proc.isLiveConnected());
     const bool useStatic = ref != nullptr && channel == 0 && speedIdx == 3 && ! ref->longTermDb.empty();
 
     mixA.update (slopes[slopeIdx], smooths[smoothIdx], speedIdx, hold);
@@ -1569,12 +1632,13 @@ void Content::tick()
     spectrum.showRef = vts.getRawParameterValue ("showRef")->load() > 0.5f;
     spectrum.showDiff = pro && vts.getRawParameterValue ("showDiff")->load() > 0.5f;
     spectrum.holdOn = hold;
-    spectrum.refLoaded = ref != nullptr;
+    spectrum.refLoaded = refPresent;
     spectrum.longTerm = speedIdx == 3;
     spectrum.channelName = u8s (chNames[channel]);
 
     // Tonale Balance
-    tonal.refLoaded = ref != nullptr;
+    tonal.refLoaded = refPresent;
+    tonal.refLive = live;
     tonal.mixValid = mixA.averageSeconds() >= 2.0 && mixA.bands (tonal.mix);
     tonal.mixSeconds = mixA.averageSeconds();
     if (ref != nullptr && channel == 0 && ref->hasBands)
@@ -1587,6 +1651,7 @@ void Content::tick()
     {
         tonal.refValid = refA.averageSeconds() >= 2.0 && refA.bands (tonal.ref);
         tonal.channelNote = channel != 0 ? u8s ("Kanal: ") + u8s (chNames[channel]).toLowerCase() : juce::String();
+        if (live && channel == 0) tonal.channelNote = u8s ("Mix ") + mmss (tonal.mixSeconds) + u8s (" · Ref live ") + mmss (refA.averageSeconds());
     }
 
     // Lautheit
@@ -1594,10 +1659,16 @@ void Content::tick()
     r.mixM = proc.mixLoud.m.load(); r.mixS = proc.mixLoud.s.load(); r.mixI = proc.mixLoud.i.load();
     r.mixLra = proc.mixLoud.lra.load(); r.mixTp = proc.mixLoud.tp.load();
     r.mixSMax = proc.mixLoud.sMax.load(); r.mixMMax = proc.mixLoud.mMax.load();
-    r.refLoaded = ref != nullptr;
+    r.refLoaded = refPresent;
+    r.refLive = live;
     r.refRunning = proc.isRefRunning();
     r.refM = proc.refLoud.m.load(); r.refS = proc.refLoud.s.load();
-    if (ref != nullptr)
+    if (live)
+    {
+        r.refI = proc.refLoud.i.load(); r.refLra = proc.refLoud.lra.load(); r.refTp = proc.refLoud.tp.load();
+        r.refSMax = proc.refLoud.sMax.load(); r.refMMax = proc.refLoud.mMax.load();
+    }
+    else if (ref != nullptr)
     {
         r.refI = ref->integrated; r.refLra = ref->lra; r.refTp = ref->truePeak;
         r.refSMax = ref->shortMax; r.refMMax = ref->momentaryMax;
@@ -1616,13 +1687,21 @@ void Content::tick()
         history.push (r.mixS > -70.0f ? r.mixS : -100.0f, r.refRunning ? r.refS : -100.0f);
 
     // Knöpfe
-    const bool ab = vts.getRawParameterValue ("ab")->load() > 0.5f && ref != nullptr;
+    const bool ab = vts.getRawParameterValue ("ab")->load() > 0.5f && refPresent;
     btnA.setToggleState (! ab, juce::dontSendNotification);
     btnB.setToggleState (ab, juce::dontSendNotification);
-    btnB.setEnabled (ref != nullptr);
-    btnClear.setEnabled (ref != nullptr);
+    btnB.setEnabled (refPresent);
+    btnClear.setEnabled (ref != nullptr && ! live);
+    btnLoad.setEnabled (! live);
+    btnSync.setEnabled (! live);
+    btnLive.setToggleState (live, juce::dontSendNotification);
+    if ((bool) btnLive.getProperties().getWithDefault ("dot", false) != proc.isLiveConnected())
+    {
+        btnLive.getProperties().set ("dot", proc.isLiveConnected());
+        btnLive.repaint();
+    }
     const bool sync = vts.getRawParameterValue ("sync")->load() > 0.5f;
-    btnPlay.setEnabled (! sync && ref != nullptr);
+    btnPlay.setEnabled (! sync && ref != nullptr && ! live);
     btnPlay.setToggleState (! sync && proc.isFreePlaying(), juce::dontSendNotification);
     btnPlay.setButtonText (! sync && proc.isFreePlaying() ? "STOP" : "PLAY");
 
@@ -1704,6 +1783,11 @@ void AnalyzerEditor::filesDropped (const juce::StringArray& files, int, int)
 {
     content.setDragHover (false);
     int slot = proc.currentSlot();
+    if (slot >= AnalyzerProcessor::numSlots)
+    {
+        slot = 0;
+        proc.setSlot (0);
+    }
     for (auto& f : files)
     {
         const juce::File file (f);

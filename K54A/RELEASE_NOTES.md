@@ -1,5 +1,11 @@
 K-54 Analyzer · Keller54 · by Frank E. – BETA
 
+Neu in 1.2.0 – Live-Referenz:
+- Slot LIVE: misst alles, was am Sidechain-Eingang ankommt, als Referenz – eine andere Spur, ein externer Player oder eine App über ein virtuelles Audiogerät
+- A/B, Lautheitsangleich, Tonale Balance, Differenzkurve, Vektorskop und Lautheitswerte funktionieren wie bei einer Datei
+- Es wird nichts aufgenommen oder gespeichert, nur live gemessen
+- Anleitung für Logic, Ableton und Cubase direkt im Plugin
+
 Neu in 1.1.0 – für Einsteiger und Profis:
 - Schalter EINFACH / PRO: EINFACH zeigt das Wichtigste mit Einschätzung in klaren Worten, PRO alle Werkzeuge
 - Tonale Balance: 6 Frequenzbereiche deines Mixes gegenüber der Referenz (lautstärkeunabhängig), mit Tipp in einem Satz

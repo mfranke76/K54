@@ -224,6 +224,7 @@ int main (int argc, char** argv)
         auto mono = std::make_unique<AnalyzerProcessor>();
         juce::AudioProcessor::BusesLayout lay;
         lay.inputBuses.add (juce::AudioChannelSet::mono());
+        lay.inputBuses.add (juce::AudioChannelSet::disabled());
         lay.outputBuses.add (juce::AudioChannelSet::mono());
         check (mono->setBusesLayout (lay), "Mono-Layout erlaubt");
         mono->prepareToPlay (48000.0, 256);
@@ -326,6 +327,73 @@ int main (int argc, char** argv)
         check (! proc->isMonitoringActive(), "Abhören zurückgestellt");
     }
 
+    // ---- 1.2: Live-Referenz über Sidechain ---------------------------------
+    {
+        auto lp = std::make_unique<AnalyzerProcessor>();
+        juce::AudioProcessor::BusesLayout lay;
+        lay.inputBuses.add (juce::AudioChannelSet::stereo());
+        lay.inputBuses.add (juce::AudioChannelSet::stereo());
+        lay.outputBuses.add (juce::AudioChannelSet::stereo());
+        check (lp->setBusesLayout (lay), "Sidechain-Layout (Stereo + Stereo-Sidechain) erlaubt");
+        lp->prepareToPlay (48000.0, 512);
+        setParam (*lp, "refSlot", 4.0f);
+        setParam (*lp, "ab", 1.0f);
+        setParam (*lp, "match", 0.0f);
+        check (lp->isLiveSlot(), "Slot LIVE gewählt");
+
+        juce::AudioBuffer<float> b (4, 512);
+        juce::MidiBuffer m;
+        double ph = 0.0;
+        LoudnessMeter scM, outL;
+        scM.prepare (48000.0); outL.prepare (48000.0);
+        double maxDiff = 0.0;
+        for (int k = 0; k < 600; ++k)
+        {
+            pinkish (rnd, b.getWritePointer (0), 512, 0.5f, st);
+            b.copyFrom (1, 0, b, 0, 0, 512);
+            for (int i = 0; i < 512; ++i)
+            {
+                const float v = 0.25f * (float) std::sin (ph);
+                ph += 2.0 * juce::MathConstants<double>::pi * 1000.0 / 48000.0;
+                b.setSample (2, i, v); b.setSample (3, i, v);
+            }
+            juce::AudioBuffer<float> sc (2, 512);
+            sc.copyFrom (0, 0, b, 2, 0, 512); sc.copyFrom (1, 0, b, 3, 0, 512);
+            lp->processBlock (b, m);
+            scM.process (sc.getReadPointer (0), sc.getReadPointer (1), 512);
+            outL.process (b.getReadPointer (0), b.getReadPointer (1), 512);
+            if (k > 20)
+                for (int i = 0; i < 512; ++i)
+                    maxDiff = std::max (maxDiff, (double) std::abs (b.getSample (0, i) - sc.getSample (0, i)));
+        }
+        check (lp->isLiveConnected() && lp->hasLiveSignal() && lp->hasReference(), "Sidechain erkannt, Signal da");
+        check (maxDiff < 1.0e-5, "B = Sidechain-Signal (max. Abweichung " + juce::String (maxDiff, 7) + ")");
+        check (near (lp->refLoud.i.load(), scM.integrated(), 0.1f), "LIVE-Lautheit " + juce::String (lp->refLoud.i.load(), 2)
+               + " LUFS (Sidechain " + juce::String (scM.integrated(), 2) + ")");
+
+        setParam (*lp, "match", 1.0f);
+        LoudnessMeter outMatch; outMatch.prepare (48000.0);
+        for (int k = 0; k < 900; ++k)
+        {
+            pinkish (rnd, b.getWritePointer (0), 512, 0.5f, st);
+            b.copyFrom (1, 0, b, 0, 0, 512);
+            for (int i = 0; i < 512; ++i)
+            {
+                const float v = 0.25f * (float) std::sin (ph);
+                ph += 2.0 * juce::MathConstants<double>::pi * 1000.0 / 48000.0;
+                b.setSample (2, i, v); b.setSample (3, i, v);
+            }
+            lp->processBlock (b, m);
+            if (k > 300) outMatch.process (b.getReadPointer (0), b.getReadPointer (1), 512);
+        }
+        check (near (outMatch.integrated(), lp->mixLoud.i.load(), 0.7f), "LIVE angeglichen: Ausgang " + juce::String (outMatch.integrated(), 2)
+               + " LUFS / Mix " + juce::String (lp->mixLoud.i.load(), 2) + " LUFS");
+
+        setParam (*lp, "refSlot", 0.0f);
+        for (int k = 0; k < 10; ++k) lp->processBlock (b, m);
+        check (! lp->isLiveSlot() && ! lp->hasReference(), "Zurück auf leeren Slot 1: keine Referenz");
+    }
+
     // Oberfläche: Screenshots EINFACH und PRO
     std::cout << "Oberfläche" << std::endl;
     setParam (*proc, "match", 1.0f);
@@ -360,6 +428,11 @@ int main (int argc, char** argv)
         c.setScopeTab (true);
         for (int t = 0; t < 60; ++t) { runAudio (*proc, 1.0 / 30.0, 0.5f, rnd, st); editor->runTick(); }
         snap ("screen_pro.png");
+        proc->setSlot (4);
+        for (int t = 0; t < 10; ++t) { runAudio (*proc, 1.0 / 30.0, 0.5f, rnd, st); editor->runTick(); }
+        snap ("screen_live.png");
+        proc->setSlot (0);
+        for (int t = 0; t < 10; ++t) { runAudio (*proc, 1.0 / 30.0, 0.5f, rnd, st); editor->runTick(); }
         check (c.isPro() && proc->getProMode(), "PRO-Modus gemerkt");
 
         const auto report = c.buildReport();
