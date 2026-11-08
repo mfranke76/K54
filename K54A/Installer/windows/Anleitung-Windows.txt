@@ -1,0 +1,27 @@
+K-54 Analyzer · Keller54 · by Frank E.
+======================================
+
+INSTALLIEREN
+1. DAW schließen (Ableton, Cubase, Bitwig, FL Studio ...).
+2. Doppelklick auf die Setup-Datei "K-54-Analyzer-...-Setup.exe" und den Schritten folgen.
+   Meldet Windows "Der Computer wurde durch Windows geschützt":
+   auf "Weitere Informationen" > "Trotzdem ausführen" klicken.
+
+Installiert werden:
+- VST3:  C:\Programme\Gemeinsame Dateien\VST3\K-54 Analyzer.vst3
+- App:   C:\Programme\Keller54\K-54 Analyzer\K-54 Analyzer.exe (Startmenü > Keller54)
+
+IN DER DAW
+Plugins neu scannen lassen, dann "Keller54 > K-54 Analyzer" als letzten
+Effekt auf den Master legen.
+
+BEDIENUNG
+Spektrum 20 Hz – 20 kHz: Gold = Mix, Blau = Referenz, beide einzeln ein/aus.
+Lautheit nach EBU R128: Integrated, Short-Term, Momentary, LRA, True Peak.
+Referenz: LADEN oder Datei hineinziehen, oben A (Mix) / B (Referenz).
+LAUTHEIT ANGLEICHEN macht die Referenz so laut wie deinen Mix.
+Der "?"-Knopf oben rechts erklärt alles im Plugin.
+
+DEINSTALLIEREN
+Startmenü > Keller54 > K-54 Analyzer deinstallieren
+(oder Einstellungen > Apps).

@@ -1,0 +1,48 @@
+K-54 Analyzer · Keller54 · by Frank E.
+======================================
+
+INSTALLIEREN
+1. DAW schließen.
+2. Doppelklick auf "K-54 Analyzer installieren.pkg" und den Schritten folgen
+   (am Ende wird dein Mac-Passwort abgefragt).
+
+Installiert werden:
+- Audio Unit:  /Library/Audio/Plug-Ins/Components/K-54 Analyzer.component
+- VST3:        /Library/Audio/Plug-Ins/VST3/K-54 Analyzer.vst3
+- App:         /Programme/K-54 Analyzer.app
+
+LOGIC PRO
+Mixer > Stereo-Out > freier Audio-Effekt-Platz (ganz unten) >
+Audio Units > Keller54 > K-54 Analyzer
+
+SPEKTRUM (20 Hz – 20 kHz)
+Gold = dein Mix, Blau = Referenz.
+MIX / REFERENZ: Kurven einzeln ein- und ausblenden.
+NEIGUNG 4,5 dB/Okt.: ein ausgewogener Mix sieht ungefähr waagerecht aus.
+GLÄTTUNG: ruhigere Kurven für den Vergleich. HOLD: Spitzen festhalten.
+Maus über das Spektrum: Frequenz, Ton und Pegel.
+
+LAUTHEIT (EBU R128 / ITU BS.1770)
+Integrated = ganzer Song, Short-Term = 3 s, Momentary = 0,4 s,
+LRA = Lautheitsumfang, True Peak = echte Spitzen (Streaming: unter -1 dBTP).
+ZIEL oben wählen (z. B. -14 LUFS Spotify/YouTube), "Δ zum Ziel" zeigt den Abstand.
+AUTO-RESET: bei jedem Start der DAW wird neu gemessen. Sonst RESET drücken.
+
+REFERENZ & A/B
+LADEN oder Datei hineinziehen (WAV, AIFF, FLAC, MP3, OGG, M4A).
+A = Mix hören, B = Referenz hören.
+LAUTHEIT ANGLEICHEN: Referenz wird so laut wie dein Mix (fairer Vergleich).
+GAIN: Referenz zusätzlich lauter/leiser (Doppelklick = 0 dB).
+DAW-SYNC an: Referenz läuft mit der DAW-Position mit.
+  Klick in die Wellenform = Referenz an diese Stelle setzen.
+DAW-SYNC aus: Referenz läuft frei mit PLAY/STOP (Schleife).
+Die Referenz wird mit dem Projekt gespeichert (Pfad zur Datei).
+
+DEINSTALLIEREN
+Doppelklick auf "K-54 Analyzer deinstallieren.command".
+
+HINWEIS
+Weil der K-54 Analyzer nicht bei Apple registriert ist: Falls macOS beim Öffnen
+meldet, der Entwickler sei nicht verifiziert, mit Rechtsklick (Ctrl-Klick) auf die
+Datei > "Öffnen" bestätigen, oder unter Systemeinstellungen >
+Datenschutz & Sicherheit > "Trotzdem öffnen".
