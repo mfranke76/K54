@@ -135,6 +135,7 @@ public:
         lraDb = 0.0f;
         tpMax = 0.0f;
         shortMax = silent;
+        momentaryMax = silent;
     }
 
     // R == nullptr → Mono
@@ -167,6 +168,7 @@ public:
     float integrated() const noexcept { return integratedDb; }
     float lra() const noexcept        { return lraDb; }
     float shortTermMax() const noexcept { return shortMax; }
+    float momentaryMaxDb() const noexcept { return momentaryMax; }
     float truePeakDb() const noexcept { return tpMax > 1.0e-6f ? 20.0f * std::log10 (tpMax) : silent; }
     bool hasIntegrated() const noexcept { return integratedDb > -90.0f; }
 
@@ -243,6 +245,7 @@ private:
                 const int b = binOf (momentaryDb);
                 ++gCount[(size_t) b];
                 gSum[(size_t) b] += m;
+                momentaryMax = std::max (momentaryMax, momentaryDb);
             }
         }
 
@@ -315,7 +318,7 @@ private:
     std::array<int64_t, numBins> gCount {}, stCount {};
     std::array<double, numBins> gSum {}, stSum {};
 
-    float momentaryDb = silent, shortDb = silent, integratedDb = silent, lraDb = 0.0f, shortMax = silent;
+    float momentaryDb = silent, shortDb = silent, integratedDb = silent, lraDb = 0.0f, shortMax = silent, momentaryMax = silent;
     float tpMax = 0.0f;
 };
 

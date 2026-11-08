@@ -12,54 +12,69 @@ class AnalyzerProcessor::Loader : public juce::Thread
 public:
     explicit Loader (AnalyzerProcessor& p) : juce::Thread ("K-54 Analyzer Referenz"), owner (p) {}
 
-    void request (const juce::File& f, double rate)
+    void request (const juce::File& f, double rate, int slot)
     {
         {
             const juce::ScopedLock sl (lock);
-            job = f;
-            jobRate = rate;
-            hasJob = true;
+            // gleicher Slot: ältere Aufträge verwerfen
+            for (auto it = jobs.begin(); it != jobs.end();)
+                it = it->slot == slot ? jobs.erase (it) : it + 1;
+            jobs.push_back ({ f, rate, slot });
         }
         notify();
+    }
+
+    bool hasNewerJob (int slot)
+    {
+        const juce::ScopedLock sl (lock);
+        for (auto& j : jobs) if (j.slot == slot) return true;
+        return false;
     }
 
     void run() override
     {
         while (! threadShouldExit())
         {
-            juce::File f;
-            double rate = 0.0;
+            Job job;
+            bool have = false;
             {
                 const juce::ScopedLock sl (lock);
-                if (hasJob) { f = job; rate = jobRate; hasJob = false; }
+                if (! jobs.empty()) { job = jobs.front(); jobs.pop_front(); have = true; }
             }
 
-            if (f == juce::File())
+            if (! have)
             {
                 wait (-1);
                 continue;
             }
 
+            owner.loadingSlot.store (job.slot);
+            owner.setStatus (refLoading, juce::String::fromUTF8 ("Lade ") + job.file.getFileName() + " ...");
+
             juce::String error;
-            auto stop = [this] { if (threadShouldExit()) return true; const juce::ScopedLock sl (lock); return hasJob; };
-            auto data = owner.decodeReference (f, rate, error, stop);
+            auto stop = [this, &job] { return threadShouldExit() || hasNewerJob (job.slot); };
+            auto data = owner.decodeReference (job.file, job.rate, error, stop);
 
             if (data != nullptr)
-                owner.publishReference (std::move (data));
+                owner.publishReference (std::move (data), job.slot);
             else if (! stop())
                 owner.setStatus (refError, error);
+
+            owner.loadingSlot.store (-1);
+            ++owner.refVersion;
         }
     }
 
 private:
+    struct Job { juce::File file; double rate = 48000.0; int slot = 0; };
     AnalyzerProcessor& owner;
     juce::CriticalSection lock;
-    juce::File job;
-    double jobRate = 48000.0;
-    bool hasJob = false;
+    std::deque<Job> jobs;
 };
 
 //==============================================================================
+static juce::String u8 (const char* s) { return juce::String::fromUTF8 (s); }
+
 juce::AudioProcessorValueTreeState::ParameterLayout AnalyzerProcessor::createLayout()
 {
     using namespace juce;
@@ -77,14 +92,28 @@ juce::AudioProcessorValueTreeState::ParameterLayout AnalyzerProcessor::createLay
     l.add (std::make_unique<AudioParameterChoice> (ParameterID { "slope", 1 }, "Neigung",
                                                    StringArray { "0 dB/Okt.", "3 dB/Okt.", "4,5 dB/Okt.", "6 dB/Okt." }, 2));
     l.add (std::make_unique<AudioParameterChoice> (ParameterID { "speed", 1 }, "Tempo",
-                                                   StringArray { "Langsam", "Mittel", "Schnell" }, 1));
+                                                   StringArray { "Langsam", "Mittel", "Schnell", "Langzeit" }, 1));
     l.add (std::make_unique<AudioParameterChoice> (ParameterID { "smooth", 1 }, "Glaettung",
                                                    StringArray { "Aus", "1/12 Okt.", "1/6 Okt.", "1/3 Okt." }, 1));
     l.add (std::make_unique<AudioParameterChoice> (ParameterID { "target", 1 }, "Ziel-Lautheit",
                                                    StringArray { "Kein Ziel", "-14 LUFS  Spotify / YouTube",
                                                                  "-16 LUFS  Apple Music", "-23 LUFS  EBU R128 (TV)",
-                                                                 "-9 LUFS  Club / laut" }, 1));
+                                                                 "-9 LUFS  Club / laut", "-24 LUFS  ATSC A/85 (US-TV)" }, 1));
     l.add (std::make_unique<AudioParameterBool> (ParameterID { "autoReset", 1 }, "Auto-Reset bei Play", true));
+
+    // ab 1.1
+    l.add (std::make_unique<AudioParameterBool> (ParameterID { "showDiff", 2 }, "Differenzkurve", false));
+    l.add (std::make_unique<AudioParameterChoice> (ParameterID { "channel", 2 }, "Kanal Spektrum",
+                                                   StringArray { "L+R (Mid)", "Links", "Rechts", "Side" }, 0));
+    l.add (std::make_unique<AudioParameterChoice> (ParameterID { "fftRes", 2 }, "Aufloesung",
+                                                   StringArray { "Normal", "Hoch", "Sehr hoch" }, 0));
+    l.add (std::make_unique<AudioParameterChoice> (ParameterID { "monitor", 2 }, "Abhoeren",
+                                                   StringArray { "Stereo", "Mono", "Side" }, 0));
+    l.add (std::make_unique<AudioParameterChoice> (ParameterID { "band", 2 }, "Band-Solo",
+                                                   StringArray { "Voller Bereich", "Bass < 150 Hz",
+                                                                 u8 ("Mitten 150 Hz – 5 kHz"), u8 ("Höhen > 5 kHz") }, 0));
+    l.add (std::make_unique<AudioParameterChoice> (ParameterID { "refSlot", 2 }, "Referenz-Slot",
+                                                   StringArray { "1", "2", "3", "4" }, 0));
     return l;
 }
 
@@ -101,6 +130,25 @@ AnalyzerProcessor::AnalyzerProcessor()
     pRefGain   = apvts.getRawParameterValue ("refGain");
     pSync      = apvts.getRawParameterValue ("sync");
     pAutoReset = apvts.getRawParameterValue ("autoReset");
+    pSlot      = apvts.getRawParameterValue ("refSlot");
+    pMonitor   = apvts.getRawParameterValue ("monitor");
+    pBand      = apvts.getRawParameterValue ("band");
+
+    for (int s = 0; s < numSlots; ++s)
+    {
+        refs[(size_t) s].store (nullptr);
+        refOffset[(size_t) s].store (0);
+        keepOffset[(size_t) s].store (false);
+        resetSlotPos[(size_t) s].store (false);
+    }
+
+    juce::PropertiesFile::Options o;
+    o.applicationName = "K-54 Analyzer";
+    o.filenameSuffix = ".settings";
+    o.folderName = "Keller54";
+    o.osxLibrarySubFolder = "Application Support";
+    o.storageFormat = juce::PropertiesFile::storeAsXML;
+    settings = std::make_unique<juce::PropertiesFile> (o);
 
     refL.assign (scratchSize, 0.0f);
     refR.assign (scratchSize, 0.0f);
@@ -119,10 +167,45 @@ AnalyzerProcessor::~AnalyzerProcessor()
     loader->notify();
     loader->stopThread (5000);
 
-    delete activeRef.exchange (nullptr);
+    for (auto& r : refs)
+        delete r.exchange (nullptr);
     const juce::ScopedLock sl (trashLock);
     for (auto& t : trash) delete t.first;
     trash.clear();
+}
+
+bool AnalyzerProcessor::getProMode() const { return settings->getBoolValue ("pro", false); }
+
+void AnalyzerProcessor::setProMode (bool pro)
+{
+    settings->setValue ("pro", pro);
+    settings->saveIfNeeded();
+}
+
+int AnalyzerProcessor::currentSlot() const noexcept
+{
+    return juce::jlimit (0, numSlots - 1, (int) std::lround (pSlot->load()));
+}
+
+void AnalyzerProcessor::setSlot (int slot)
+{
+    if (auto* prm = apvts.getParameter ("refSlot"))
+    {
+        prm->beginChangeGesture();
+        prm->setValueNotifyingHost (prm->convertTo0to1 ((float) juce::jlimit (0, numSlots - 1, slot)));
+        prm->endChangeGesture();
+    }
+    ++refVersion;
+}
+
+float AnalyzerProcessor::getRefGainDb() const noexcept
+{
+    return pRefGain->load() + (pMatch->load() > 0.5f ? matchGainDb.load() : 0.0f);
+}
+
+bool AnalyzerProcessor::isMonitoringActive() const noexcept
+{
+    return pMonitor->load() > 0.5f || pBand->load() > 0.5f;
 }
 
 bool AnalyzerProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
@@ -145,20 +228,36 @@ void AnalyzerProcessor::prepareToPlay (double sampleRate, int)
     refGain.reset (sr, 0.05);
     refGain.setCurrentAndTargetValue (juce::Decibels::decibelsToGain (pRefGain->load()));
     abPos = pAB->load() > 0.5f ? 1.0f : 0.0f;
+    audioSlot = currentSlot();
+    slotFade = 1.0f;
     matchInit = false;
 
-    juce::File pending;
-    {
-        const juce::ScopedLock sl (pendingLock);
-        pending = pendingLoad;
-        pendingLoad = juce::File();
-    }
+    juce::dsp::ProcessSpec spec { sr, (juce::uint32) scratchSize, 2 };
+    using LR = juce::dsp::LinkwitzRileyFilterType;
+    lpBass.setType (LR::lowpass);   lpBass.setCutoffFrequency (150.0f);
+    hpMid.setType (LR::highpass);   hpMid.setCutoffFrequency (150.0f);
+    lpMid.setType (LR::lowpass);    lpMid.setCutoffFrequency (5000.0f);
+    hpHigh.setType (LR::highpass);  hpHigh.setCutoffFrequency (5000.0f);
+    for (auto* f : { &lpBass, &hpMid, &lpMid, &hpHigh }) f->prepare (spec);
 
-    if (pending.existsAsFile())
-        loadReference (pending);
-    else if (auto* r = getRef())
-        if (std::abs (r->sampleRate - sr) > 0.5 && r->file.existsAsFile())
-            loader->request (r->file, sr);
+    for (int s = 0; s < numSlots; ++s)
+    {
+        juce::File pending;
+        {
+            const juce::ScopedLock sl (pendingLock);
+            pending = pendingLoad[(size_t) s];
+            pendingLoad[(size_t) s] = juce::File();
+        }
+
+        if (pending.existsAsFile())
+            loadReference (pending, s);
+        else if (auto* r = getRef (s))
+            if (std::abs (r->sampleRate - sr) > 0.5 && r->file.existsAsFile())
+            {
+                keepOffset[(size_t) s].store (true);
+                loader->request (r->file, sr, s);
+            }
+    }
 }
 
 //==============================================================================
@@ -200,20 +299,23 @@ void AnalyzerProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mi
         mixLevels.maxPeak.store (0.0f);
         refLevels.maxPeak.store (0.0f);
         matchInit = false;
+        ++resetCount;
     }
 
-    if (resetRefPos.exchange (false))
-    {
-        refOffset.store (0);
-        freePos = 0;
-        matchInit = false;
-    }
+    for (int s = 0; s < numSlots; ++s)
+        if (resetSlotPos[(size_t) s].exchange (false))
+        {
+            refOffset[(size_t) s].store (0);
+            freePos[(size_t) s] = 0;
+            if (s == audioSlot) matchInit = false;
+        }
 
+    const int want = currentSlot();
     const int64_t seek = seekRequest.exchange (-1);
     if (seek >= 0)
     {
-        if (pSync->load() > 0.5f) refOffset.store (seek - lastDawPos);
-        else                      freePos = seek;
+        if (pSync->load() > 0.5f) refOffset[(size_t) want].store (seek - lastDawPos);
+        else                      freePos[(size_t) want] = seek;
     }
 
     const bool stereo = numIn > 1;
@@ -224,17 +326,18 @@ void AnalyzerProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mi
         float* L = buffer.getWritePointer (0, done);
         float* R = stereo ? buffer.getWritePointer (1, done) : L;
         processChunk (L, R, stereo, m, playing, dawPos >= 0 ? dawPos + done : -1);
+        applyMonitoring (L, R, stereo, m);
         done += m;
     }
 
     mixLoud.store (mixMeter);
     refLoud.store (refMeter);
 
-    // Anzeige-Position der Referenz (auch bei gestoppter DAW)
-    if (auto* ref = getRef())
+    // Anzeige-Position der Referenz im gewählten Slot (auch bei gestoppter DAW)
+    if (auto* ref = getRef (want))
     {
         const int64_t len = ref->length();
-        int64_t p = pSync->load() > 0.5f ? lastDawPos + refOffset.load() : freePos;
+        int64_t p = pSync->load() > 0.5f ? lastDawPos + refOffset[(size_t) want].load() : freePos[(size_t) want];
         p = juce::jlimit<int64_t> (0, juce::jmax<int64_t> (0, len - 1), p);
         refPosSeconds.store ((double) p / sr);
     }
@@ -247,8 +350,20 @@ void AnalyzerProcessor::processChunk (float* L, float* R, bool stereo, int n, bo
     mixLevels.process (L, R, n);
     mixFifo.push (L, R, n);
 
+    // ---- Slot-Wechsel: alte Referenz kurz ausblenden, dann umschalten -----
+    const int want = currentSlot();
+    if (want != audioSlot && getRef (audioSlot) == nullptr)
+    {
+        audioSlot = want;
+        slotFade = 0.0f;
+        refMeter.resetAll();
+        matchInit = false;
+    }
+    const bool fadingOut = want != audioSlot;
+    const float fadeStep = (float) (1.0 / (0.01 * sr));
+
     // ---- Referenz ---------------------------------------------------------
-    RefData* ref = getRef();
+    RefData* ref = getRef (audioSlot);
     float* rl = refL.data();
     float* rr = refR.data();
     bool active = false;
@@ -264,7 +379,7 @@ void AnalyzerProcessor::processChunk (float* L, float* R, bool stereo, int n, bo
             if (playing && dawPos >= 0)
             {
                 active = true;
-                const int64_t start = dawPos + refOffset.load();
+                const int64_t start = dawPos + refOffset[(size_t) audioSlot].load();
                 for (int i = 0; i < n; ++i)
                 {
                     const int64_t idx = start + i;
@@ -277,17 +392,18 @@ void AnalyzerProcessor::processChunk (float* L, float* R, bool stereo, int n, bo
         else if (freePlaying.load())
         {
             active = true;
-            if (freePos < 0 || freePos >= len) freePos = 0;
+            int64_t& fp = freePos[(size_t) audioSlot];
+            if (fp < 0 || fp >= len) fp = 0;
             for (int i = 0; i < n; ++i)
             {
-                rl[i] = srcL[freePos];
-                rr[i] = srcR[freePos];
-                if (++freePos >= len) freePos = 0;
+                rl[i] = srcL[fp];
+                rr[i] = srcR[fp];
+                if (++fp >= len) fp = 0;
             }
         }
     }
 
-    refRunning.store (active);
+    refRunning.store (active && ! fadingOut);
 
     // ---- Angleich-Gain (alle ~100 ms nachführen) ---------------------------
     matchCounter += n;
@@ -312,29 +428,42 @@ void AnalyzerProcessor::processChunk (float* L, float* R, bool stereo, int n, bo
 
     if (active)
     {
-        refMeter.process (rl, rr, n);      // Zahlen = Original-Datei (ohne Gain)
-        refLevels.process (rl, rr, n);
+        if (! fadingOut)
+        {
+            refMeter.process (rl, rr, n);      // Zahlen = Original-Datei (ohne Gain)
+            refLevels.process (rl, rr, n);
+        }
         for (int i = 0; i < n; ++i)
         {
-            const float g = refGain.getNextValue();
+            slotFade = fadingOut ? juce::jmax (0.0f, slotFade - fadeStep) : juce::jmin (1.0f, slotFade + fadeStep);
+            const float g = refGain.getNextValue() * slotFade;
             rl[i] *= g;
             rr[i] *= g;
         }
-        refFifo.push (rl, rr, n);          // Kurve = so wie du sie hörst
+        if (! fadingOut)
+            refFifo.push (rl, rr, n);          // Kurve = so wie du sie hörst
     }
     else
     {
         refGain.skip (n);
+        slotFade = fadingOut ? 0.0f : juce::jmin (1.0f, slotFade + fadeStep * (float) n);
         std::fill (rl, rl + n, 0.0f);
         std::fill (rr, rr + n, 0.0f);
     }
 
+    if (fadingOut && slotFade <= 0.0f)
+    {
+        audioSlot = want;
+        refMeter.resetAll();
+        matchInit = false;
+    }
+
     // ---- A/B mit kurzer Überblendung --------------------------------------
-    const float targetAB = (pAB->load() > 0.5f && ref != nullptr) ? 1.0f : 0.0f;
+    const float targetAB = (pAB->load() > 0.5f && (ref != nullptr || getRef (want) != nullptr)) ? 1.0f : 0.0f;
     const float step = (float) (1.0 / (0.015 * sr));
 
     if (targetAB <= 0.0f && abPos <= 0.0f)
-        return; // reiner Mix, nichts zu tun
+        return; // reiner Mix
 
     for (int i = 0; i < n; ++i)
     {
@@ -354,6 +483,44 @@ void AnalyzerProcessor::processChunk (float* L, float* R, bool stereo, int n, bo
     }
 }
 
+void AnalyzerProcessor::applyMonitoring (float* L, float* R, bool stereo, int n)
+{
+    const int mon = (int) std::lround (pMonitor->load());
+    const int band = (int) std::lround (pBand->load());
+
+    if (band != lastBand)
+    {
+        for (auto* f : { &lpBass, &hpMid, &lpMid, &hpHigh }) f->reset();
+        lastBand = band;
+    }
+
+    if (stereo && mon > 0)
+    {
+        for (int i = 0; i < n; ++i)
+        {
+            const float v = mon == 1 ? 0.5f * (L[i] + R[i]) : 0.5f * (L[i] - R[i]);
+            L[i] = R[i] = v;
+        }
+    }
+
+    if (band <= 0)
+        return;
+
+    const int chans = stereo ? 2 : 1;
+    for (int ch = 0; ch < chans; ++ch)
+    {
+        float* d = ch == 0 ? L : R;
+        for (int i = 0; i < n; ++i)
+        {
+            float x = d[i];
+            if (band == 1)      x = lpBass.processSample (ch, x);
+            else if (band == 2) x = lpMid.processSample (ch, hpMid.processSample (ch, x));
+            else                x = hpHigh.processSample (ch, x);
+            d[i] = x;
+        }
+    }
+}
+
 //==============================================================================
 void AnalyzerProcessor::setStatus (int s, const juce::String& msg)
 {
@@ -365,35 +532,48 @@ void AnalyzerProcessor::setStatus (int s, const juce::String& msg)
     ++refVersion;
 }
 
-void AnalyzerProcessor::loadReference (const juce::File& file)
+void AnalyzerProcessor::loadReference (const juce::File& file, int slot)
 {
+    slot = juce::jlimit (0, numSlots - 1, slot);
     if (! file.existsAsFile())
     {
-        setStatus (refError, juce::String::fromUTF8 ("Datei nicht gefunden: ") + file.getFileName());
+        setStatus (refError, u8 ("Datei nicht gefunden: ") + file.getFileName());
         return;
     }
-
-    setStatus (refLoading, juce::String::fromUTF8 ("Lade ") + file.getFileName() + " ...");
 
     const double rate = hostRate.load();
     if (rate <= 0.0)
     {
         const juce::ScopedLock sl (pendingLock);
-        pendingLoad = file;
+        pendingLoad[(size_t) slot] = file;
+        loadingSlot.store (slot);
+        setStatus (refLoading, u8 ("Lade ") + file.getFileName() + " ...");
         return;
     }
-    loader->request (file, rate);
+    loadingSlot.store (slot);
+    setStatus (refLoading, u8 ("Lade ") + file.getFileName() + " ...");
+    loader->request (file, rate, slot);
 }
 
-void AnalyzerProcessor::clearReference()
+void AnalyzerProcessor::trashRef (RefData* r)
 {
-    if (auto* old = activeRef.exchange (nullptr))
+    if (r == nullptr) return;
+    const juce::ScopedLock sl (trashLock);
+    trash.push_back ({ r, juce::Time::getMillisecondCounter() });
+}
+
+void AnalyzerProcessor::clearReference (int slot)
+{
+    slot = juce::jlimit (0, numSlots - 1, slot);
+    trashRef (refs[(size_t) slot].exchange (nullptr));
     {
-        const juce::ScopedLock sl (trashLock);
-        trash.push_back ({ old, juce::Time::getMillisecondCounter() });
+        const juce::ScopedLock sl (pendingLock);
+        pendingLoad[(size_t) slot] = juce::File();
     }
-    freePlaying.store (false);
-    resetRefPos.store (true);
+    resetSlotPos[(size_t) slot].store (true);
+    bool any = false;
+    for (int s = 0; s < numSlots; ++s) any = any || getRef (s) != nullptr;
+    if (! any) freePlaying.store (false);
     setStatus (refEmpty, {});
 }
 
@@ -409,7 +589,7 @@ std::unique_ptr<RefData> AnalyzerProcessor::decodeReference (const juce::File& f
     std::unique_ptr<juce::AudioFormatReader> reader (formatManager.createReaderFor (file));
     if (reader == nullptr)
     {
-        error = juce::String::fromUTF8 ("Dieses Format kann nicht gelesen werden: ") + file.getFileName();
+        error = u8 ("Dieses Format kann nicht gelesen werden: ") + file.getFileName();
         return nullptr;
     }
 
@@ -417,12 +597,12 @@ std::unique_ptr<RefData> AnalyzerProcessor::decodeReference (const juce::File& f
     const int64_t len = reader->lengthInSamples;
     if (fileRate <= 0.0 || len <= 0)
     {
-        error = juce::String::fromUTF8 ("Die Datei ist leer oder beschädigt.");
+        error = u8 ("Die Datei ist leer oder beschädigt.");
         return nullptr;
     }
     if ((double) len / fileRate > 20.0 * 60.0)
     {
-        error = juce::String::fromUTF8 ("Die Referenz ist zu lang (höchstens 20 Minuten).");
+        error = u8 ("Die Referenz ist zu lang (höchstens 20 Minuten).");
         return nullptr;
     }
 
@@ -463,12 +643,12 @@ std::unique_ptr<RefData> AnalyzerProcessor::decodeReference (const juce::File& f
 
     const int total = data->audio.getNumSamples();
     data->seconds = (double) total / targetRate;
+    const float* L = data->audio.getReadPointer (0);
+    const float* R = data->audio.getReadPointer (1);
 
     // Lautheit der ganzen Datei
     LoudnessMeter lm;
     lm.prepare (targetRate);
-    const float* L = data->audio.getReadPointer (0);
-    const float* R = data->audio.getReadPointer (1);
     for (int pos = 0; pos < total; pos += 8192)
     {
         lm.process (L + pos, R + pos, juce::jmin (8192, total - pos));
@@ -478,6 +658,53 @@ std::unique_ptr<RefData> AnalyzerProcessor::decodeReference (const juce::File& f
     data->truePeak = lm.truePeakDb();
     data->lra = lm.lra();
     data->shortMax = lm.shortTermMax();
+    data->momentaryMax = lm.momentaryMaxDb();
+
+    // Langzeit-Spektrum der ganzen Datei (für Tonale Balance und Langzeit-Kurve)
+    {
+        const int order = SpecMath::optimalOrder (targetRate, 0);
+        const int size = 1 << order;
+        juce::dsp::FFT fft (order);
+        float wsum = 1.0f;
+        const auto win = SpecMath::hann (size, wsum);
+        std::vector<float> buf ((size_t) size * 2);
+        std::vector<double> avg ((size_t) size / 2 + 1, 0.0);
+        const float scale = 2.0f / wsum;
+        int frames = 0, count = 0;
+
+        for (int start = 0; start < total; start += size / 2)
+        {
+            for (int i = 0; i < size; ++i)
+            {
+                const int idx = start + i;
+                buf[(size_t) i] = idx < total ? 0.5f * (L[idx] + R[idx]) * win[(size_t) i] : 0.0f;
+            }
+            std::fill (buf.begin() + size, buf.end(), 0.0f);
+            fft.performFrequencyOnlyForwardTransform (buf.data(), true);
+
+            double sum = 0.0;
+            for (int k = 0; k <= size / 2; ++k)
+            {
+                const float a = buf[(size_t) k] * scale;
+                buf[(size_t) k] = a * a;
+                sum += buf[(size_t) k];
+            }
+            if (sum > 1.0e-7)
+            {
+                for (int k = 0; k <= size / 2; ++k) avg[(size_t) k] += buf[(size_t) k];
+                ++frames;
+            }
+            if ((++count & 63) == 0 && shouldStop()) return nullptr;
+        }
+
+        if (frames > 0)
+        {
+            std::vector<float> avgF (avg.size());
+            for (size_t k = 0; k < avg.size(); ++k) avgF[k] = (float) (avg[k] / frames);
+            SpecMath::pointsFromPower (avgF, size, targetRate, 1.0f / 12.0f, false, data->longTermDb);
+            data->hasBands = SpecMath::bandsFromPower (avgF, size, targetRate, data->bands);
+        }
+    }
 
     // Wellenform-Übersicht
     const int cols = 1600;
@@ -495,21 +722,18 @@ std::unique_ptr<RefData> AnalyzerProcessor::decodeReference (const juce::File& f
     return data;
 }
 
-void AnalyzerProcessor::publishReference (std::unique_ptr<RefData> data)
+void AnalyzerProcessor::publishReference (std::unique_ptr<RefData> data, int slot)
 {
+    slot = juce::jlimit (0, numSlots - 1, slot);
     RefData* fresh = data.release();
-    RefData* old = activeRef.exchange (fresh, std::memory_order_acq_rel);
+    RefData* old = refs[(size_t) slot].exchange (fresh, std::memory_order_acq_rel);
 
     const bool sameFile = old != nullptr && old->file == fresh->file;
-    const bool keep = keepOffset.exchange (false);
+    const bool keep = keepOffset[(size_t) slot].exchange (false);
     if (! sameFile && ! keep)
-        resetRefPos.store (true);
+        resetSlotPos[(size_t) slot].store (true);
 
-    if (old != nullptr)
-    {
-        const juce::ScopedLock sl (trashLock);
-        trash.push_back ({ old, juce::Time::getMillisecondCounter() });
-    }
+    trashRef (old);
     setStatus (refReady, {});
 }
 
@@ -533,14 +757,18 @@ void AnalyzerProcessor::timerCallback()
 void AnalyzerProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
     auto state = apvts.copyState();
-    if (auto* r = getRef())
-        state.setProperty ("refPath", r->file.getFullPathName(), nullptr);
-    else
+    for (int s = 0; s < numSlots; ++s)
     {
-        const juce::ScopedLock sl (pendingLock);
-        state.setProperty ("refPath", pendingLoad.getFullPathName(), nullptr);
+        juce::String path;
+        if (auto* r = getRef (s)) path = r->file.getFullPathName();
+        else
+        {
+            const juce::ScopedLock sl (pendingLock);
+            path = pendingLoad[(size_t) s].getFullPathName();
+        }
+        state.setProperty ("refPath" + juce::String (s), path, nullptr);
+        state.setProperty ("refOffset" + juce::String (s), juce::String (refOffset[(size_t) s].load()), nullptr);
     }
-    state.setProperty ("refOffset", juce::String (refOffset.load()), nullptr);
     state.setProperty ("uiScale", uiScale.load(), nullptr);
 
     if (auto xml = state.createXml())
@@ -555,22 +783,32 @@ void AnalyzerProcessor::setStateInformation (const void* data, int sizeInBytes)
 
     auto state = juce::ValueTree::fromXml (*xml);
     apvts.replaceState (state);
+    uiScale.store ((float) (double) state.getProperty ("uiScale", 0.85));
 
-    uiScale.store ((float) (double) state.getProperty ("uiScale", 0.9));
-    const auto path = state.getProperty ("refPath").toString();
-    const auto offset = state.getProperty ("refOffset").toString().getLargeIntValue();
-
-    if (path.isNotEmpty())
+    for (int s = 0; s < numSlots; ++s)
     {
-        const juce::File f (path);
-        auto* cur = getRef();
-        if (cur == nullptr || cur->file != f)
+        auto path = state.getProperty ("refPath" + juce::String (s)).toString();
+        auto offset = state.getProperty ("refOffset" + juce::String (s)).toString().getLargeIntValue();
+        if (s == 0 && path.isEmpty())   // Projekte aus Version 1.0
         {
-            keepOffset.store (true);
-            loadReference (f);
+            path = state.getProperty ("refPath").toString();
+            offset = state.getProperty ("refOffset").toString().getLargeIntValue();
         }
+
+        refOffset[(size_t) s].store (offset);
+        if (path.isNotEmpty())
+        {
+            const juce::File f (path);
+            auto* cur = getRef (s);
+            if (cur == nullptr || cur->file != f)
+            {
+                keepOffset[(size_t) s].store (true);
+                loadReference (f, s);
+            }
+        }
+        else if (getRef (s) != nullptr)
+            clearReference (s);
     }
-    refOffset.store (offset);
 }
 
 juce::AudioProcessorEditor* AnalyzerProcessor::createEditor()

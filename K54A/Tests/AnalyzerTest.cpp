@@ -233,34 +233,144 @@ int main (int argc, char** argv)
         check (mono->mixLoud.s.load() > -40.0f, "Mono-Messung: " + juce::String (mono->mixLoud.s.load(), 2) + " LUFS");
     }
 
-    // Oberfläche: Screenshot
+    // ---- 1.1: Tonale Balance der Referenz -------------------------------
+    std::cout << "Version 1.1: Bänder, Slots, Abhören" << std::endl;
+    check (ref->hasBands && ref->longTermDb.size() == (size_t) SpecMath::numPoints, "Referenz: Langzeit-Spektrum + Bänder berechnet");
+    {
+        int loudest = 0;
+        for (int i = 1; i < SpecMath::numBands; ++i) if (ref->bands[(size_t) i] > ref->bands[(size_t) loudest]) loudest = i;
+        check (loudest == 0, juce::String ("Referenz mit 55-Hz-Bass: lautestes Band = ") + SpecMath::bandName (loudest)
+               + " (" + juce::String (ref->bands[0], 1) + " dB)");
+    }
+
+    // ---- Slot 2 mit anderer Datei ------------------------------------------
+    {
+        const double fs = 48000.0;
+        juce::AudioBuffer<float> b2 (2, (int) (8 * fs));
+        for (int i = 0; i < b2.getNumSamples(); ++i)
+        {
+            const float v = 0.1f * (float) std::sin (2.0 * juce::MathConstants<double>::pi * 2000.0 * i / fs);
+            b2.setSample (0, i, v); b2.setSample (1, i, v);
+        }
+        auto f2 = outDir.getChildFile ("Referenz Zwei.wav");
+        f2.deleteFile();
+        {
+            std::unique_ptr<juce::OutputStream> os = std::make_unique<juce::FileOutputStream> (f2);
+            juce::WavAudioFormat wav;
+            auto w = wav.createWriterFor (os, juce::AudioFormatWriterOptions{}.withSampleRate (fs).withNumChannels (2).withBitsPerSample (24));
+            w->writeFromAudioSampleBuffer (b2, 0, b2.getNumSamples());
+        }
+        proc->loadReference (f2, 1);
+        for (int i = 0; i < 200 && proc->getRef (1) == nullptr; ++i) juce::Thread::sleep (25);
+        auto* r2 = proc->getRef (1);
+        check (r2 != nullptr && proc->getRef (0) == ref, "Slot 2 geladen, Slot 1 unverändert");
+
+        setParam (*proc, "match", 0.0f);
+        setParam (*proc, "ab", 1.0f);
+        proc->setFreePlaying (true);
+        proc->setSlot (1);
+        runAudio (*proc, 0.5, 0.5f, rnd, st);
+        LoudnessMeter o2; o2.prepare (48000.0);
+        runAudio (*proc, 5.0, 0.5f, rnd, st, &o2);
+        check (r2 != nullptr && near (o2.integrated(), r2->integrated, 0.5f), "Umschalten auf Slot 2: Ausgang " + juce::String (o2.integrated(), 2)
+               + " LUFS (Datei " + juce::String (r2 != nullptr ? r2->integrated : 0.0f, 2) + ")");
+        proc->setSlot (0);
+        runAudio (*proc, 0.5, 0.5f, rnd, st);
+        check (proc->getRef() == ref, "Zurück auf Slot 1");
+
+        // Projekt mit 2 Slots speichern/laden
+        juce::MemoryBlock st2;
+        proc->getStateInformation (st2);
+        auto p3 = std::make_unique<AnalyzerProcessor>();
+        p3->setPlayConfigDetails (2, 2, 48000.0, 512);
+        p3->setStateInformation (st2.getData(), (int) st2.getSize());
+        p3->prepareToPlay (48000.0, 512);
+        for (int i = 0; i < 300 && (p3->getRef (0) == nullptr || p3->getRef (1) == nullptr); ++i) juce::Thread::sleep (25);
+        check (p3->getRef (0) != nullptr && p3->getRef (1) != nullptr, "Projekt wiederherstellen: beide Slots geladen");
+    }
+
+    // ---- Abhören ------------------------------------------------------------
+    {
+        setParam (*proc, "ab", 0.0f);
+        runAudio (*proc, 0.1, 0.5f, rnd, st);
+        juce::AudioBuffer<float> b (2, 512);
+        juce::MidiBuffer m;
+        auto fill = [&] (float l, float r, double freq)
+        {
+            for (int i = 0; i < 512; ++i)
+            {
+                const float v = (float) std::sin (2.0 * juce::MathConstants<double>::pi * freq * i / 48000.0);
+                b.setSample (0, i, l * v); b.setSample (1, i, r * v);
+            }
+        };
+
+        setParam (*proc, "monitor", 1.0f);
+        fill (0.5f, 0.0f, 1000.0);
+        proc->processBlock (b, m);
+        check (std::abs (b.getSample (0, 100) - b.getSample (1, 100)) < 1.0e-6f && std::abs (b.getSample (0, 100)) > 0.0f, "Abhören Mono: L = R");
+        check (proc->isMonitoringActive(), "Abhören-Warnung aktiv");
+
+        setParam (*proc, "monitor", 2.0f);
+        fill (0.5f, 0.5f, 1000.0);
+        proc->processBlock (b, m);
+        check (b.getMagnitude (0, 512) < 1.0e-6f, "Abhören Side: Mono-Signal verschwindet");
+
+        setParam (*proc, "monitor", 0.0f);
+        setParam (*proc, "band", 1.0f);
+        float rmsHigh = 0.0f, rmsLow = 0.0f;
+        for (int k = 0; k < 40; ++k) { fill (0.5f, 0.5f, 8000.0); proc->processBlock (b, m); rmsHigh = b.getRMSLevel (0, 0, 512); }
+        for (int k = 0; k < 40; ++k) { fill (0.5f, 0.5f, 60.0);   proc->processBlock (b, m); rmsLow = b.getRMSLevel (0, 0, 512); }
+        check (rmsHigh < 0.002f && rmsLow > 0.2f, "Band-Solo Bass: 8 kHz " + juce::String (juce::Decibels::gainToDecibels (rmsHigh), 1)
+               + " dB, 60 Hz " + juce::String (juce::Decibels::gainToDecibels (rmsLow), 1) + " dB");
+        setParam (*proc, "band", 0.0f);
+        check (! proc->isMonitoringActive(), "Abhören zurückgestellt");
+    }
+
+    // Oberfläche: Screenshots EINFACH und PRO
     std::cout << "Oberfläche" << std::endl;
     setParam (*proc, "match", 1.0f);
     setParam (*proc, "hold", 0.0f);
+    setParam (*proc, "ab", 1.0f);
+    proc->setFreePlaying (true);
+    proc->resetMeasurements();
     {
         std::unique_ptr<juce::AudioProcessorEditor> ed (proc->createEditor());
         auto* editor = dynamic_cast<AnalyzerEditor*> (ed.get());
         editor->setSize (Content::W, Content::H);
-        for (int t = 0; t < 120; ++t)
-        {
-            runAudio (*proc, 1.0 / 30.0, 0.5f, rnd, st);
-            editor->runTick();
-        }
-        auto img = editor->getContent().createComponentSnapshot (editor->getContent().getLocalBounds(), true, 1.0f);
-        auto shot = outDir.getChildFile ("screen_analyzer.png");
-        shot.deleteFile();
-        juce::FileOutputStream os (shot);
-        juce::PNGImageFormat().writeImageToStream (img, os);
-        os.flush();
-        check (shot.getSize() > 10000, "Screenshot " + shot.getFullPathName());
+        auto& c = editor->getContent();
 
-        // Hilfe
-        editor->getContent().getChildComponent (editor->getContent().getNumChildComponents() - 1)->setVisible (true);
-        auto img2 = editor->getContent().createComponentSnapshot (editor->getContent().getLocalBounds(), true, 1.0f);
-        auto shot2 = outDir.getChildFile ("screen_help.png");
-        shot2.deleteFile();
-        juce::FileOutputStream os2 (shot2);
-        juce::PNGImageFormat().writeImageToStream (img2, os2);
+        auto snap = [&] (const char* name)
+        {
+            auto img = c.createComponentSnapshot (c.getLocalBounds(), true, 1.0f);
+            auto shot = outDir.getChildFile (name);
+            shot.deleteFile();
+            juce::FileOutputStream os (shot);
+            juce::PNGImageFormat().writeImageToStream (img, os);
+            os.flush();
+            check (shot.getSize() > 10000, juce::String ("Screenshot ") + name);
+        };
+
+        c.setPro (false);
+        for (int t = 0; t < 150; ++t) { runAudio (*proc, 1.0 / 30.0, 0.5f, rnd, st); editor->runTick(); }
+        snap ("screen_einfach.png");
+
+        c.setPro (true);
+        setParam (*proc, "showDiff", 1.0f);
+        setParam (*proc, "speed", 3.0f);
+        c.setScopeTab (true);
+        for (int t = 0; t < 60; ++t) { runAudio (*proc, 1.0 / 30.0, 0.5f, rnd, st); editor->runTick(); }
+        snap ("screen_pro.png");
+        check (c.isPro() && proc->getProMode(), "PRO-Modus gemerkt");
+
+        const auto report = c.buildReport();
+        check (report.contains ("Integrated") && report.contains ("TONALE BALANCE"), "Messbericht enthält Lautheit und Tonale Balance");
+        outDir.getChildFile ("Bericht.txt").replaceWithText (report);
+
+        c.showHelp (true);
+        snap ("screen_help.png");
+        c.showHelp (false);
+        c.setPro (false);
+        setParam (*proc, "speed", 1.0f);
     }
 
     // Aufräumen + Leistung

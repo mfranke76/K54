@@ -20,9 +20,11 @@ namespace col
     const juce::Colour text    { 0xffe9e4d6 };
     const juce::Colour dim     { 0xff8d877a };
     const juce::Colour ref     { 0xff46c3f0 };
+    const juce::Colour diff    { 0xffc9a2f2 };
     const juce::Colour good    { 0xff6fd08c };
     const juce::Colour warn    { 0xffef9a3c };
     const juce::Colour red     { 0xffe5484d };
+    const juce::Colour plot    { 0xff0c0c0e };
 }
 
 juce::String u8s (const char* s);
@@ -46,10 +48,11 @@ public:
 //==============================================================================
 struct Readouts
 {
-    float mixM = -100, mixS = -100, mixI = -100, mixLra = 0, mixTp = -100;
-    float refM = -100, refS = -100, refI = -100, refLra = 0, refTp = -100;
+    float mixM = -100, mixS = -100, mixI = -100, mixLra = 0, mixTp = -100, mixSMax = -100, mixMMax = -100;
+    float refM = -100, refS = -100, refI = -100, refLra = 0, refTp = -100, refSMax = -100, refMMax = -100;
     bool refLoaded = false, refRunning = false;
-    float target = 1000.0f; // 1000 = kein Ziel
+    float target = 1000.0f;  // 1000 = kein Ziel
+    float tpLimit = -1.0f;
 };
 
 class SpectrumView : public juce::Component
@@ -60,8 +63,8 @@ public:
     void mouseMove (const juce::MouseEvent&) override;
     void mouseExit (const juce::MouseEvent&) override;
 
-    bool showMix = true, showRef = true, holdOn = false, refLoaded = false;
-    float slope = 4.5f;
+    bool showMix = true, showRef = true, showDiff = false, holdOn = false, refLoaded = false, longTerm = false;
+    juce::String channelName;
 
     static constexpr float topDb = 6.0f, botDb = -90.0f;
 
@@ -69,9 +72,11 @@ private:
     float xForFreq (float f, juce::Rectangle<float> r) const;
     float yForDb (float db, juce::Rectangle<float> r) const;
     juce::Path makePath (const std::vector<float>& v, juce::Rectangle<float> r, bool closed) const;
+    void computeDiff();
 
     SpectrumAnalyser& mixA;
     SpectrumAnalyser& refA;
+    std::vector<float> diff, diffTmp;
     juce::Point<float> mouse;
     bool mouseIn = false;
 };
@@ -81,6 +86,7 @@ class LoudnessPanel : public juce::Component
 public:
     void paint (juce::Graphics&) override;
     Readouts r;
+    bool pro = false;
 };
 
 class MeterPanel : public juce::Component
@@ -111,6 +117,36 @@ private:
     int pos = 0;
 };
 
+class ScopeView : public juce::Component
+{
+public:
+    ScopeView();
+    void paint (juce::Graphics&) override;
+    void pushMix (const float* L, const float* R, int n) { push (mL, mR, mPos, L, R, n); }
+    void pushRef (const float* L, const float* R, int n) { push (rL, rR, rPos, L, R, n); }
+    void clearRef() { std::fill (rL.begin(), rL.end(), 0.0f); std::fill (rR.begin(), rR.end(), 0.0f); }
+    bool showRef = true;
+    float mixCorr = 0, refCorr = 0;
+    bool refRunning = false;
+
+private:
+    static constexpr int len = 2048;
+    void push (std::vector<float>& a, std::vector<float>& b, int& p, const float* L, const float* R, int n);
+    std::vector<float> mL, mR, rL, rR;
+    int mPos = 0, rPos = 0;
+    float scaleSmooth = 1.0f;
+};
+
+class TonalView : public juce::Component
+{
+public:
+    void paint (juce::Graphics&) override;
+    std::array<float, SpecMath::numBands> mix {}, ref {};
+    bool mixValid = false, refValid = false, refLoaded = false, pro = false;
+    double mixSeconds = 0.0;
+    juce::String channelNote;
+};
+
 class WaveView : public juce::Component
 {
 public:
@@ -136,17 +172,25 @@ public:
 class Content : public juce::Component
 {
 public:
-    static constexpr int W = 1200, H = 740;
+    static constexpr int W = 1280, H = 800;
     explicit Content (AnalyzerProcessor&);
     ~Content() override;
     void paint (juce::Graphics&) override;
     void resized() override;
     void tick();
     void setDragHover (bool h) { wave.dragHover = h; wave.repaint(); }
+    void setPro (bool pro);
+    bool isPro() const noexcept { return pro; }
+    void showHelp (bool s) { help.setVisible (s); if (s) help.toFront (false); }
+    void setScopeTab (bool scope);
+    juce::String buildReport() const;
 
 private:
     void openFileChooser();
+    void exportReport();
     void setAB (bool b);
+    void setParam (const char* id, float value);
+    void updateVisibility();
     void panel (juce::Graphics&, juce::Rectangle<int>, const juce::String& title) const;
 
     using BA = juce::AudioProcessorValueTreeState::ButtonAttachment;
@@ -159,24 +203,29 @@ private:
     LoudnessPanel loud;
     MeterPanel meters;
     HistoryView history;
+    ScopeView scope;
+    TonalView tonal;
     WaveView wave { proc };
     HelpOverlay help;
 
-    juce::TextButton btnA, btnB, btnReset, btnHelp, btnAuto;
-    juce::ComboBox cbTarget, cbSlope, cbSpeed, cbSmooth;
-    juce::TextButton btnShowMix, btnShowRef, btnHold;
+    juce::TextButton btnSimple, btnPro, btnA, btnB, btnReset, btnHelp, btnAuto, btnReport;
+    juce::TextButton btnTabHist, btnTabScope;
+    juce::ComboBox cbTarget, cbSlope, cbSpeed, cbSmooth, cbRes, cbChannel, cbMonitor, cbBand;
+    juce::TextButton btnShowMix, btnShowRef, btnShowDiff, btnHold;
     juce::TextButton btnLoad, btnClear, btnSync, btnPlay, btnMatch;
+    std::array<juce::TextButton, AnalyzerProcessor::numSlots> btnSlot;
     juce::Slider sGain;
-    juce::Label lbSlope, lbSpeed, lbSmooth, lbGain, lbTarget;
+    juce::Label lbSlope, lbSpeed, lbSmooth, lbRes, lbChannel, lbGain, lbTarget, lbMonitor;
 
-    std::unique_ptr<BA> aShowMix, aShowRef, aHold, aSync, aMatch, aAuto;
-    std::unique_ptr<CA> aTarget, aSlope, aSpeed, aSmooth;
+    std::unique_ptr<BA> aShowMix, aShowRef, aShowDiff, aHold, aSync, aMatch, aAuto;
+    std::unique_ptr<CA> aTarget, aSlope, aSpeed, aSmooth, aRes, aChannel, aMonitor, aBand;
     std::unique_ptr<SA> aGain;
     std::unique_ptr<juce::FileChooser> chooser;
 
-    std::vector<float> pullBuf;
-    int tickCount = 0, lastRefVersion = -1;
-    juce::Rectangle<int> rHeader, rSpec, rLoud, rMeter, rHist, rRef;
+    std::vector<float> pullL, pullR, mono;
+    int tickCount = 0, lastRefVersion = -1, lastSlot = -1, lastReset = -1, lastRes = -1, lastChannel = -1;
+    bool pro = false, scopeTab = true;
+    juce::Rectangle<int> rHeader, rSpec, rTonal, rHist, rLoud, rMeter, rRef;
 
     friend class AnalyzerEditor;
 };
