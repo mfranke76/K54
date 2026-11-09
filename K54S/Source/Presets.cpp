@@ -322,7 +322,7 @@ const std::vector<FactoryPreset>& getFactoryPresets()
             { AA, 0.03f }, { AS, 0.9f }, { AR, 0.3f }, { CHM, 0.2f }, { RVS, 0.2f }, { VOL, -8.0f }, { MODE, POLY } } },
 
         // ============================================================ TONEWHEEL & LESLIE
-#define TW_BASE KEYS_ONLY, { KM, TWHEEL }, { KFX, FX_LESLIE }, { KW, KW_LESLIE }, { MWV, 0.0f }, { KL, -4.0f }
+#define TW_BASE KEYS_ONLY, { KM, TWHEEL }, { KFX, FX_LESLIE }, { KW, KW_LESLIE }, { MWV, 0.0f }, { KL, -1.0f }
         { "Jazz Drawbars", "Tonewheel & Leslie", { TW_BASE,
             { KV, 0 }, { KA, 0.55f }, { KB, 0.35f }, { KD, 0.35f }, { KT, 0.55f }, { KDRV, 0.1f }, { KFA, 0.7f }, { RVS, 0.12f } } },
         { "Gospel Leslie", "Tonewheel & Leslie", { TW_BASE,

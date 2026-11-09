@@ -333,6 +333,7 @@ public:
                 std::fill (ks.begin(), ks.end(), 0.0f);
                 ksW = 0;
                 ksPrev = 0.0f;
+                silentRun = 0;
                 excLen = juce::jmax (2, (int) ((1.25f - vel * 0.85f) * 0.0011f * (float) sr));
                 excPos = 0;
                 pan = juce::jlimit (-0.4f, 0.4f, (key - 60.0f) / 60.0f);
@@ -425,7 +426,7 @@ private:
         if (excPos < excLen)
         {
             const float w = std::sin (juce::MathConstants<float>::pi * (float) excPos / (float) excLen);
-            exc = (w * w * 1.4f + (noise.nextFloat() - 0.5f) * 0.15f) * (0.4f + 0.6f * vel);
+            exc = (w * w * 0.9f + (noise.nextFloat() - 0.5f) * 0.1f) * (0.4f + 0.6f * vel);
             ++excPos;
         }
         const float out = ksRead (D - 1.0);
@@ -449,9 +450,11 @@ private:
         if (! gate)
         {
             relGain *= 0.9993f;
-            if (relGain < 0.002f || (t > 0.02 && std::abs (out) < 1.0e-5f)) active = false;
+            if (relGain < 0.002f) active = false;
         }
-        else if (t > 0.05 && std::abs (out) < 1.0e-6f && std::abs (ksPrev) < 1.0e-6f) active = false;
+        // ausgeklungen: Energie ueber eine Periode verfolgen (nicht an einem Nulldurchgang abschalten)
+        silentRun = std::abs (out) < 1.0e-5f ? silentRun + 1 : 0;
+        if (t > 0.05 && silentRun > (int) (period * 2.0) + 64) active = false;
         return (y * 0.85f + thunk) * relGain;
     }
 
@@ -495,7 +498,7 @@ private:
         const float k = (reedPiano ? 2.2f : 0.9f) + p.a * vel * (reedPiano ? 4.5f : 3.2f);
         const float tb = std::tanh (k * bias);
         const float norm = 1.0f / (k * (1.0f - tb * tb) + 1.0e-3f);
-        float y = (std::tanh (k * (x + bias)) - tb) * norm * 0.55f;
+        float y = (std::tanh (k * (x + bias)) - tb) * norm * 0.42f;
 
         // Hammer-Thump
         if (t < 0.02)
@@ -527,7 +530,7 @@ private:
             if (d == 8 && perc) g *= 1.0f - p.a;     // B3: 1' schweigt bei Percussion
             y += KeysTables::sine (phases[d]) * g;
         }
-        y *= 0.28f;
+        y *= 0.2f;
         // Percussion (3. Harmonische), nur beim ersten Anschlag (Single Trigger)
         {
             double f = hz * 3.0;
@@ -536,7 +539,7 @@ private:
             if (perc && percOn)
             {
                 const float pd = 0.25f + 0.9f * p.decay;
-                y += KeysTables::sine (phases[9]) * p.a * 0.55f * std::exp (-6.9f * (float) t / pd);
+                y += KeysTables::sine (phases[9]) * p.a * 0.4f * std::exp (-6.9f * (float) t / pd);
             }
         }
         // Tastenklick
@@ -724,7 +727,7 @@ private:
     double phases[maxRanks] {};
     float rankEnv[maxRanks] {};
     std::vector<float> ks;
-    int ksW = 0, excLen = 0, excPos = 0;
+    int ksW = 0, excLen = 0, excPos = 0, silentRun = 0;
     float ksPrev = 0.0f, relClick = 0.0f;
     float env = 0.0f, relGain = 1.0f, noiseLp = 0.0f, clickEnv = 1.0f, windRnd = 0.0f, pan = 0.0f;
     float fb1 = 0.0f, scoop = 0.0f, harpLp1 = 0.0f, harpLp2 = 0.0f;
@@ -906,7 +909,7 @@ public:
         if (! params.on && activeVoices() == 0 && ! tailActive) return;
         tailActive = params.on;
         postChain (total);
-        const float g = params.level * (params.wheel == ParamChoices::kwSwell ? (0.15f + 0.85f * wheel) : 1.0f) * (0.15f + 0.85f * expression);
+        const float g = 0.38f * params.level * (params.wheel == ParamChoices::kwSwell ? (0.15f + 0.85f * wheel) : 1.0f) * (0.15f + 0.85f * expression);
         for (int s = 0; s < total; ++s) { L[s] += bufL[(size_t) s] * g; R[s] += bufR[(size_t) s] * g; }
     }
 
@@ -1141,6 +1144,7 @@ private:
         if (! target) for (auto& v : voices) if (! target || v.getAge() < target->getAge()) target = &v;
         const int play = juce::jlimit (0, 127, note + params.octave * 12);
         const bool percTrigger = held == 0;      // Percussion nur, wenn keine Taste gehalten wird
+        lastBlock.p = params;                    // immer das aktuelle Modell (auch vor dem ersten Block)
         target->noteOn (note, play, vel, stamp, lastBlock, percTrigger);
         ++held;
     }

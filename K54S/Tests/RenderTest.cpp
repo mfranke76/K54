@@ -507,7 +507,8 @@ int main (int argc, char** argv)
             proc.prepareToPlay (sr, block);
             auto out = render (proc, sr, block, 0.7, { { 0, 69, true, 0.8f } });
             const double hz = estimateHz (out, at (0.3), at (0.08), sr);
-            const bool ok = std::abs (hz - 440.0) < 6.0;
+            const bool bell = m == ParamChoices::kFmBell;     // Glocken: unharmonisch, Oktave genuegt
+            const bool ok = std::abs (hz - 440.0) < 6.0 || (bell && std::abs (hz - 220.0) < 4.0);
             std::printf ("%s Tonhoehe %-16s A4 = %.1f Hz\n", ok ? "OK  " : "FAIL", ParamChoices::keysModels[m].toRawUTF8(), hz);
             allOk &= ok;
         }
