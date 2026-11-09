@@ -138,6 +138,12 @@ void K54Look::drawLinearSlider (juce::Graphics& g, int x, int y, int w, int h, f
 
 //==============================================================================
 // SPEKTRUM
+static juce::String fmtFreq (float f)
+{
+    return f < 1000.0f ? juce::String (juce::roundToInt (f)) + " Hz"
+                       : juce::String (f / 1000.0f, f < 10000.0f ? 2 : 1).replaceCharacter ('.', ',') + " kHz";
+}
+
 float SpectrumView::xForFreq (float f, juce::Rectangle<float> r) const
 {
     return r.getX() + r.getWidth() * std::log (f / SpecMath::fMin) / std::log (SpecMath::fMax / SpecMath::fMin);
@@ -147,6 +153,11 @@ float SpectrumView::yForDb (float db, juce::Rectangle<float> r) const
 {
     const float t = (juce::jlimit (botDb - 2.0f, topDb, db) - topDb) / (botDb - topDb);
     return r.getY() + t * r.getHeight();
+}
+
+juce::Colour SpectrumView::gridCol (juce::Colour base) const
+{
+    return gridLevel == 0 ? base.withAlpha (0.45f) : (gridLevel == 2 ? base.brighter (0.45f) : base);
 }
 
 juce::Path SpectrumView::makePath (const std::vector<float>& v, juce::Rectangle<float> r, bool closed) const
@@ -169,6 +180,89 @@ juce::Path SpectrumView::makePath (const std::vector<float>& v, juce::Rectangle<
     return p;
 }
 
+void SpectrumView::setStyle (const ViewStyle& s)
+{
+    const int oldMode = mode;
+    mode = juce::jlimit (0, 2, s.specMode);
+    topDb = s.topDb();
+    botDb = s.botDb();
+    lineW = s.lineWidth();
+    fillA = s.fillAlpha();
+    gridLevel = s.grid;
+    glow = s.glow;
+    peaks = s.peaks;
+
+    // Farbskala fürs Spektrogramm aus der Mix-Farbe
+    const auto c = theme().mix;
+    juce::ColourGradient grad (col::plot, 0.0f, 0.0f, juce::Colours::white, 1.0f, 0.0f, false);
+    grad.addColour (0.18, col::plot.interpolatedWith (c, 0.10f));
+    grad.addColour (0.45, c.darker (0.85f));
+    grad.addColour (0.72, c);
+    grad.addColour (0.90, c.brighter (0.7f));
+    for (int i = 0; i < 256; ++i)
+        lut[(size_t) i] = grad.getColourAtPosition ((double) i / 255.0);
+
+    if (oldMode != mode) clearHistory();
+    repaint();
+}
+
+void SpectrumView::clearHistory()
+{
+    if (sgram.isValid()) sgram.clear (sgram.getBounds(), col::plot);
+    barHoldMix.fill (-130.0f);
+    barHoldAge.fill (0);
+}
+
+void SpectrumView::computeBars (const std::vector<float>& src, std::array<float, numBars>& out) const
+{
+    const int n = (int) src.size();
+    const float perOct = (float) (n - 1) / std::log2 (SpecMath::fMax / SpecMath::fMin);
+    for (int b = 0; b < numBars; ++b)
+    {
+        const float fc = 1000.0f * std::pow (2.0f, (float) (b - 17) / 3.0f);
+        const float lo = std::log2 (fc * std::pow (2.0f, -1.0f / 6.0f) / SpecMath::fMin) * perOct;
+        const float hi = std::log2 (fc * std::pow (2.0f,  1.0f / 6.0f) / SpecMath::fMin) * perOct;
+        const int a = juce::jlimit (0, n - 1, (int) std::ceil (lo));
+        const int e = juce::jlimit (a, n - 1, (int) std::floor (hi));
+        double sum = 0.0;
+        for (int i = a; i <= e; ++i) sum += std::pow (10.0, src[(size_t) i] / 10.0);
+        const double mean = sum / (double) (e - a + 1);
+        out[(size_t) b] = mean > 1.0e-13 ? (float) (10.0 * std::log10 (mean)) : -130.0f;
+    }
+}
+
+void SpectrumView::advance (int holdFrames)
+{
+    if (mixA.display.empty()) return;
+
+    if (mode == 1)
+    {
+        computeBars (mixA.display, barMix);
+        if (! refA.display.empty()) computeBars (refA.display, barRef);
+        for (int b = 0; b < numBars; ++b)
+        {
+            if (barMix[(size_t) b] >= barHoldMix[(size_t) b]) { barHoldMix[(size_t) b] = barMix[(size_t) b]; barHoldAge[(size_t) b] = 0; }
+            else if (++barHoldAge[(size_t) b] > holdFrames)    barHoldMix[(size_t) b] = juce::jmax (barMix[(size_t) b], barHoldMix[(size_t) b] - 0.8f);
+        }
+    }
+    else if (mode == 2)
+    {
+        const int w = SpecMath::numPoints, h = 240;
+        if (! sgram.isValid())
+        {
+            sgram = juce::Image (juce::Image::RGB, w, h, true);
+            sgram.clear (sgram.getBounds(), col::plot);
+        }
+        sgram.moveImageSection (0, 1, 0, 0, w, h - 1);
+        juce::Image::BitmapData bd (sgram, 0, 0, w, 1, juce::Image::BitmapData::writeOnly);
+        for (int x = 0; x < w; ++x)
+        {
+            const float t = juce::jlimit (0.0f, 1.0f, (mixA.instant[(size_t) x] - botDb) / (topDb - 18.0f - botDb));
+            bd.setPixelColour (x, 0, lut[(size_t) juce::roundToInt (t * 255.0f)]);
+        }
+    }
+}
+
 // Mix minus Referenz, auf 1/3 Oktave geglättet und um den mittleren Abstand (100 Hz – 10 kHz) bereinigt
 void SpectrumView::computeDiff()
 {
@@ -178,7 +272,7 @@ void SpectrumView::computeDiff()
     for (int i = 0; i < n; ++i)
         diffTmp[(size_t) i] = mixA.display[(size_t) i] - refA.display[(size_t) i];
 
-    const int half = (int) std::round ((double) (n - 1) / std::log2 (1000.0) / 6.0); // ±1/6 Okt.
+    const int half = (int) std::round ((double) (n - 1) / std::log2 (1000.0) / 6.0);
     for (int i = 0; i < n; ++i)
     {
         float s = 0.0f; int c = 0;
@@ -196,31 +290,245 @@ void SpectrumView::computeDiff()
     for (auto& d : diff) d -= mean;
 }
 
+void SpectrumView::strokeCurve (juce::Graphics& g, const juce::Path& p, juce::Colour c, float width) const
+{
+    if (glow)
+    {
+        g.setColour (c.withAlpha (0.08f));
+        g.strokePath (p, juce::PathStrokeType (width * 6.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+        g.setColour (c.withAlpha (0.20f));
+        g.strokePath (p, juce::PathStrokeType (width * 2.8f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+    }
+    g.setColour (c);
+    g.strokePath (p, juce::PathStrokeType (width, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+}
+
+void SpectrumView::drawCurves (juce::Graphics& g, juce::Rectangle<float> r)
+{
+    const auto& th = theme();
+
+    if (showRef && refLoaded)
+    {
+        if (fillA > 0.0f)
+        {
+            g.setColour (th.ref.withAlpha (fillA * 0.22f));
+            g.fillPath (makePath (refA.display, r, true));
+        }
+        if (holdOn)
+        {
+            g.setColour (th.ref.withAlpha (0.45f));
+            g.strokePath (makePath (refA.hold, r, false), juce::PathStrokeType (0.9f));
+        }
+    }
+
+    if (showMix)
+    {
+        if (fillA > 0.0f)
+        {
+            juce::ColourGradient grad (th.mix.withAlpha (fillA), 0.0f, r.getY(),
+                                       th.mix.withAlpha (fillA * 0.06f), 0.0f, r.getBottom(), false);
+            g.setGradientFill (grad);
+            g.fillPath (makePath (mixA.display, r, true));
+        }
+        strokeCurve (g, makePath (mixA.display, r, false), th.mix, lineW);
+        if (holdOn)
+        {
+            g.setColour (th.mix.brighter (0.4f).withAlpha (0.6f));
+            g.strokePath (makePath (mixA.hold, r, false), juce::PathStrokeType (0.9f));
+        }
+    }
+
+    if (showRef && refLoaded)
+        strokeCurve (g, makePath (refA.display, r, false), th.ref, lineW * 1.05f);
+}
+
+void SpectrumView::drawBars (juce::Graphics& g, juce::Rectangle<float> r)
+{
+    const auto& th = theme();
+    const float segH = 4.0f, gap = 1.5f;
+
+    for (int b = 0; b < numBars; ++b)
+    {
+        const float fc = 1000.0f * std::pow (2.0f, (float) (b - 17) / 3.0f);
+        const float xl = juce::jmax (r.getX(), xForFreq (fc * std::pow (2.0f, -1.0f / 6.0f), r));
+        const float xr = juce::jmin (r.getRight(), xForFreq (fc * std::pow (2.0f, 1.0f / 6.0f), r));
+        const auto col = juce::Rectangle<float> (xl + 1.5f, r.getY(), juce::jmax (2.0f, xr - xl - 3.0f), r.getHeight());
+
+        if (showRef && refLoaded)
+        {
+            const float yr = yForDb (barRef[(size_t) b], r);
+            g.setColour (th.ref.withAlpha (0.10f));
+            g.fillRect (col.withTop (yr));
+        }
+
+        if (showMix)
+        {
+            const float ym = yForDb (barMix[(size_t) b], r);
+            for (float y = r.getBottom() - segH; y >= r.getY(); y -= segH + gap)
+            {
+                const bool lit = y + segH * 0.5f >= ym;
+                const float frac = (r.getBottom() - y) / r.getHeight();
+                const auto c = th.mix.interpolatedWith (th.mix.brighter (0.8f), frac * frac);
+                g.setColour (lit ? c : th.mix.withAlpha (0.05f));
+                g.fillRect (col.getX(), y, col.getWidth(), segH);
+            }
+            const float yh = yForDb (barHoldMix[(size_t) b], r);
+            if (barHoldMix[(size_t) b] > botDb)
+            {
+                g.setColour (juce::Colours::white.withAlpha (0.85f));
+                g.fillRect (col.getX(), yh - 1.0f, col.getWidth(), 2.0f);
+            }
+        }
+
+        if (showRef && refLoaded)
+        {
+            const float yr = yForDb (barRef[(size_t) b], r);
+            if (glow)
+            {
+                g.setColour (th.ref.withAlpha (0.25f));
+                g.fillRect (col.getX() - 1.0f, yr - 3.0f, col.getWidth() + 2.0f, 6.0f);
+            }
+            g.setColour (th.ref);
+            g.fillRect (col.getX(), yr - 1.5f, col.getWidth(), 3.0f);
+        }
+    }
+}
+
+void SpectrumView::drawSpectrogram (juce::Graphics& g, juce::Rectangle<float> r)
+{
+    g.setColour (col::plot);
+    g.fillRect (r);
+    if (sgram.isValid())
+    {
+        g.setImageResamplingQuality (juce::Graphics::mediumResamplingQuality);
+        g.drawImage (sgram, r, juce::RectanglePlacement::stretchToFit);
+    }
+    g.setColour (col::line);
+    g.drawRect (r, 1.0f);
+
+    // Zeitachse (30 Zeilen pro Sekunde)
+    const float rowsPerSec = 30.0f, total = 240.0f;
+    g.setFont (font (10.0f));
+    for (int sec = 2; sec <= 8; sec += 2)
+    {
+        const float y = r.getY() + r.getHeight() * ((float) sec * rowsPerSec / total);
+        g.setColour (col::text.withAlpha (0.18f));
+        g.drawHorizontalLine ((int) y, r.getX(), r.getRight());
+        g.setColour (col::dim);
+        g.drawText ("-" + juce::String (sec) + " s", juce::Rectangle<float> (r.getX() - 34.0f, y - 6.0f, 30.0f, 12.0f),
+                    juce::Justification::centredRight);
+    }
+    g.setColour (col::text.withAlpha (0.7f));
+    g.setFont (font (10.5f, true));
+    g.drawText (u8s ("SPEKTROGRAMM · Mix · neueste Zeile oben"), r.reduced (8.0f, 4.0f).withHeight (14.0f),
+                juce::Justification::centredLeft);
+
+    // Farblegende
+    auto leg = juce::Rectangle<float> (r.getRight() - 130.0f, r.getY() + 6.0f, 110.0f, 8.0f);
+    for (int i = 0; i < (int) leg.getWidth(); ++i)
+    {
+        g.setColour (lut[(size_t) juce::jlimit (0, 255, i * 255 / (int) leg.getWidth())]);
+        g.fillRect (leg.getX() + (float) i, leg.getY(), 1.0f, leg.getHeight());
+    }
+    g.setColour (col::dim);
+    g.setFont (font (9.5f));
+    g.drawText (juce::String ((int) botDb), leg.withY (leg.getBottom() + 1.0f).withHeight (11.0f), juce::Justification::centredLeft);
+    g.drawText (juce::String ((int) topDb - 18) + " dB", leg.withY (leg.getBottom() + 1.0f).withHeight (11.0f), juce::Justification::centredRight);
+}
+
+void SpectrumView::drawPeakLabels (juce::Graphics& g, juce::Rectangle<float> r)
+{
+    const auto& v = mixA.display;
+    const int n = (int) v.size(), win = 21;
+    if (n < 2 * win + 1) return;
+
+    std::vector<std::pair<float, int>> cand;
+    for (int i = win; i < n - win; ++i)
+    {
+        const float x = v[(size_t) i];
+        if (x < botDb + 10.0f) continue;
+        bool isMax = true;
+        float lo = x;
+        for (int k = i - win; k <= i + win && isMax; ++k)
+        {
+            if (v[(size_t) k] > x) isMax = false;
+            lo = juce::jmin (lo, v[(size_t) k]);
+        }
+        if (isMax && x - lo > 5.0f) cand.push_back ({ x, i });
+    }
+    std::sort (cand.begin(), cand.end(), [] (auto& a, auto& b) { return a.first > b.first; });
+
+    std::vector<float> used;
+    int count = 0;
+    for (auto& c : cand)
+    {
+        const float x = r.getX() + r.getWidth() * (float) c.second / (float) (n - 1);
+        bool clash = false;
+        for (auto u : used) clash = clash || std::abs (u - x) < 80.0f;
+        if (clash) continue;
+        used.push_back (x);
+
+        const float y = yForDb (c.first, r);
+        juce::Path tri;
+        tri.addTriangle (x - 4.0f, y - 9.0f, x + 4.0f, y - 9.0f, x, y - 3.0f);
+        g.setColour (juce::Colours::white.withAlpha (0.9f));
+        g.fillPath (tri);
+
+        const auto txt = fmtFreq (SpecMath::pointFreq (c.second));
+        g.setFont (font (10.5f, true));
+        const float tw = (float) juce::GlyphArrangement::getStringWidth (g.getCurrentFont(), txt) + 10.0f;
+        auto pill = juce::Rectangle<float> (x - tw * 0.5f, juce::jmax (r.getY() + 2.0f, y - 27.0f), tw, 16.0f);
+        pill = pill.withX (juce::jlimit (r.getX(), r.getRight() - tw, pill.getX()));
+        g.setColour (col::bg.withAlpha (0.8f));
+        g.fillRoundedRectangle (pill, 8.0f);
+        g.setColour (theme().mix.brighter (0.3f));
+        g.drawRoundedRectangle (pill, 8.0f, 1.0f);
+        g.setColour (col::text);
+        g.drawText (txt, pill, juce::Justification::centred);
+        if (++count >= 3) break;
+    }
+}
+
 void SpectrumView::paint (juce::Graphics& g)
 {
     auto b = getLocalBounds().toFloat();
-    g.setColour (col::plot);
-    g.fillRoundedRectangle (b, 4.0f);
+    {
+        juce::ColourGradient bgGrad (juce::Colour (0xff111114), 0.0f, b.getY(), juce::Colour (0xff08080a), 0.0f, b.getBottom(), false);
+        g.setGradientFill (bgGrad);
+        g.fillRoundedRectangle (b, 4.0f);
+    }
 
-    const bool drawDiff = showDiff && refLoaded && showMix;
+    const bool drawDiff = showDiff && refLoaded && showMix && mode != 1;
     auto plot = b.withTrimmedLeft (34.0f).withTrimmedBottom (20.0f).withTrimmedTop (6.0f)
                  .withTrimmedRight (drawDiff ? 34.0f : 8.0f);
 
+    auto curveR = plot;
+    juce::Rectangle<float> sgR;
+    if (mode == 2)
+    {
+        curveR = plot.withHeight (plot.getHeight() * 0.36f);
+        sgR = plot.withTrimmedTop (curveR.getHeight() + 6.0f);
+    }
+
+    // Frequenz-Raster
     static const float minor[] { 30, 40, 60, 70, 80, 90, 300, 400, 600, 700, 800, 900,
                                  3000, 4000, 6000, 7000, 8000, 9000 };
     static const float major[] { 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000 };
     static const char* labels[] { "20", "50", "100", "200", "500", "1k", "2k", "5k", "10k", "20k" };
 
-    g.setColour (col::grid.withAlpha (0.55f));
-    for (auto f : minor)
-        g.drawVerticalLine ((int) xForFreq (f, plot), plot.getY(), plot.getBottom());
+    if (gridLevel > 0 || mode != 2)
+    {
+        g.setColour (gridCol (col::grid.withAlpha (0.55f)));
+        for (auto f : minor)
+            g.drawVerticalLine ((int) xForFreq (f, plot), curveR.getY(), curveR.getBottom());
+    }
 
     g.setFont (font (11.0f));
     for (int i = 0; i < 10; ++i)
     {
         const float x = xForFreq (major[i], plot);
-        g.setColour (col::grid.brighter (0.25f));
-        g.drawVerticalLine ((int) x, plot.getY(), plot.getBottom());
+        g.setColour (gridCol (col::grid.brighter (0.25f)));
+        g.drawVerticalLine ((int) x, curveR.getY(), curveR.getBottom());
         g.setColour (col::dim);
         auto tr = juce::Rectangle<float> (x - 20.0f, plot.getBottom() + 3.0f, 40.0f, 14.0f);
         if (i == 0) tr = tr.withX (x - 2.0f);
@@ -229,94 +537,98 @@ void SpectrumView::paint (juce::Graphics& g)
                                           : (i == 9 ? juce::Justification::centredRight : juce::Justification::centred));
     }
 
-    for (int db = 0; db >= (int) botDb; db -= 12)
+    // dB-Raster
+    const float span = topDb - botDb;
+    const int step = mode == 2 ? 24 : (span >= 70.0f ? 12 : 6);
+    for (int db = (int) topDb - ((int) topDb % step + step) % step; db >= (int) botDb; db -= step)
     {
-        const float y = yForDb ((float) db, plot);
-        g.setColour (db == 0 ? col::line.brighter (0.4f) : col::grid.brighter (0.15f));
-        g.drawHorizontalLine ((int) y, plot.getX(), plot.getRight());
+        const float y = yForDb ((float) db, curveR);
+        if (y < curveR.getY() - 0.5f) continue;
+        g.setColour (db == 0 ? gridCol (col::line.brighter (0.4f)) : gridCol (col::grid.brighter (0.15f)));
+        g.drawHorizontalLine ((int) y, curveR.getX(), curveR.getRight());
         g.setColour (col::dim);
         g.drawText (juce::String (db), juce::Rectangle<float> (0.0f, y - 7.0f, 30.0f, 14.0f), juce::Justification::centredRight);
+    }
+
+    // Bereichsnamen
+    if (mode != 2 && gridLevel > 0)
+    {
+        static const float edges[] { 20, 60, 250, 800, 2500, 6000, 20000 };
+        static const char* names[] { "SUB", "BASS", "TIEFE MITTEN", "MITTEN", "PRÄSENZ", "BRILLANZ" };
+        g.setFont (font (9.5f, true));
+        for (int i = 0; i < 6; ++i)
+        {
+            const float x0 = xForFreq (edges[i], curveR), x1 = xForFreq (edges[i + 1], curveR);
+            g.setColour (col::text.withAlpha (0.16f));
+            g.drawText (u8s (names[i]), juce::Rectangle<float> (x0, curveR.getBottom() - 15.0f, x1 - x0, 12.0f),
+                        juce::Justification::centred);
+            if (i > 0)
+            {
+                g.setColour (col::text.withAlpha (0.06f));
+                g.drawVerticalLine ((int) x0, curveR.getY(), curveR.getBottom());
+            }
+        }
     }
 
     if (drawDiff) computeDiff();
 
     {
         juce::Graphics::ScopedSaveState ss (g);
-        g.reduceClipRegion (plot.toNearestInt());
+        g.reduceClipRegion (curveR.toNearestInt().expanded (0, 2));
 
-        if (showRef && refLoaded)
-        {
-            g.setColour (col::ref.withAlpha (0.07f));
-            g.fillPath (makePath (refA.display, plot, true));
-            if (holdOn)
-            {
-                g.setColour (col::ref.withAlpha (0.45f));
-                g.strokePath (makePath (refA.hold, plot, false), juce::PathStrokeType (0.9f));
-            }
-        }
-
-        if (showMix)
-        {
-            juce::ColourGradient grad (col::gold.withAlpha (0.38f), 0.0f, plot.getY(),
-                                       col::gold.withAlpha (0.03f), 0.0f, plot.getBottom(), false);
-            g.setGradientFill (grad);
-            g.fillPath (makePath (mixA.display, plot, true));
-            g.setColour (col::gold);
-            g.strokePath (makePath (mixA.display, plot, false), juce::PathStrokeType (1.6f, juce::PathStrokeType::curved));
-            if (holdOn)
-            {
-                g.setColour (col::goldHi.withAlpha (0.55f));
-                g.strokePath (makePath (mixA.hold, plot, false), juce::PathStrokeType (0.9f));
-            }
-        }
-
-        if (showRef && refLoaded)
-        {
-            g.setColour (col::ref);
-            g.strokePath (makePath (refA.display, plot, false), juce::PathStrokeType (1.8f, juce::PathStrokeType::curved));
-        }
+        if (mode == 1) drawBars (g, curveR);
+        else           drawCurves (g, curveR);
 
         if (drawDiff)
         {
-            // eigene Skala ±12 dB um die Mitte
-            const float mid = plot.getCentreY(), span = plot.getHeight() * 0.5f;
-            auto yD = [&] (float d) { return mid - juce::jlimit (-12.0f, 12.0f, d) / 12.0f * span; };
-            g.setColour (col::diff.withAlpha (0.35f));
-            g.drawHorizontalLine ((int) mid, plot.getX(), plot.getRight());
+            const float mid = curveR.getCentreY(), half = curveR.getHeight() * 0.5f;
+            auto yD = [&] (float d) { return mid - juce::jlimit (-12.0f, 12.0f, d) / 12.0f * half; };
+            g.setColour (theme().diff.withAlpha (0.35f));
+            g.drawHorizontalLine ((int) mid, curveR.getX(), curveR.getRight());
             juce::Path p;
             for (int i = 0; i < (int) diff.size(); ++i)
             {
-                const float x = plot.getX() + plot.getWidth() * (float) i / (float) (diff.size() - 1);
+                const float x = curveR.getX() + curveR.getWidth() * (float) i / (float) (diff.size() - 1);
                 if (i == 0) p.startNewSubPath (x, yD (diff[0]));
                 else        p.lineTo (x, yD (diff[(size_t) i]));
             }
-            g.setColour (col::diff);
-            g.strokePath (p, juce::PathStrokeType (2.0f, juce::PathStrokeType::curved));
+            strokeCurve (g, p, theme().diff, juce::jmax (1.6f, lineW));
         }
+
+        if (peaks && showMix && mode != 1)
+            drawPeakLabels (g, curveR);
     }
+
+    if (mode == 2)
+        drawSpectrogram (g, sgR);
 
     if (drawDiff)
     {
-        const float mid = plot.getCentreY(), span = plot.getHeight() * 0.5f;
+        const float mid = curveR.getCentreY(), half = curveR.getHeight() * 0.5f;
         g.setFont (font (10.0f, true));
-        g.setColour (col::diff);
+        g.setColour (theme().diff);
         for (int d : { 12, 6, 0, -6, -12 })
-            g.drawText ((d > 0 ? "+" : "") + juce::String (d), juce::Rectangle<float> (plot.getRight() + 3.0f, mid - (float) d / 12.0f * span - 6.0f, 30.0f, 12.0f),
+        {
+            if (mode == 2 && std::abs (d) == 6) continue;
+            g.drawText ((d > 0 ? "+" : "") + juce::String (d),
+                        juce::Rectangle<float> (curveR.getRight() + 3.0f, mid - (float) d / 12.0f * half - 6.0f, 30.0f, 12.0f),
                         juce::Justification::centredLeft);
-        g.drawText ("DIFF", juce::Rectangle<float> (plot.getRight() + 3.0f, plot.getY(), 30.0f, 12.0f), juce::Justification::centredLeft);
+        }
     }
 
     // Hinweise oben links
     {
         juce::String info;
-        if (longTerm) info << u8s ("LANGZEIT-MITTEL");
-        if (channelName.isNotEmpty()) info << (info.isNotEmpty() ? u8s ("  ·  ") : juce::String()) << channelName;
-        if (drawDiff) info << (info.isNotEmpty() ? u8s ("  ·  ") : juce::String()) << u8s ("Lila = Mix minus Referenz (+ = Mix hat mehr)");
+        auto add = [&info] (const juce::String& t) { if (info.isNotEmpty()) info << u8s ("  ·  "); info << t; };
+        if (mode == 1) add (u8s ("TERZBÄNDER"));
+        if (longTerm) add (u8s ("LANGZEIT-MITTEL"));
+        if (channelName.isNotEmpty()) add (channelName);
+        if (drawDiff) add (u8s ("Lila = Mix minus Referenz (+ = Mix hat mehr)"));
         if (info.isNotEmpty())
         {
             g.setFont (font (11.0f, true));
             g.setColour (col::text.withAlpha (0.7f));
-            g.drawText (info, plot.reduced (8.0f, 4.0f).withHeight (16.0f), juce::Justification::centredLeft);
+            g.drawText (info, curveR.reduced (8.0f, 4.0f).withHeight (16.0f), juce::Justification::centredLeft);
         }
     }
 
@@ -324,7 +636,7 @@ void SpectrumView::paint (juce::Graphics& g)
     {
         g.setColour (col::dim);
         g.setFont (font (14.0f));
-        g.drawText (u8s ("Beide Kurven ausgeblendet – oben MIX oder REFERENZ einschalten"), plot, juce::Justification::centred);
+        g.drawText (u8s ("Beide Kurven ausgeblendet – oben MIX oder REFERENZ einschalten"), curveR, juce::Justification::centred);
     }
 
     if (mouseIn && plot.contains (mouse))
@@ -337,10 +649,8 @@ void SpectrumView::paint (juce::Graphics& g)
         static const char* names[] { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "H" };
         const int midi = (int) std::lround (69.0 + 12.0 * std::log2 (f / 440.0));
         const juce::String note = juce::String (names[((midi % 12) + 12) % 12]) + juce::String (midi / 12 - 2);
-        const juce::String fs = f < 1000.0f ? juce::String (juce::roundToInt (f)) + " Hz"
-                                            : juce::String (f / 1000.0f, 2).replaceCharacter ('.', ',') + " kHz";
 
-        juce::String txt = fs + "  " + note;
+        juce::String txt = fmtFreq (f) + "  " + note;
         if (showMix) txt += "   Mix " + fmt (mixA.valueAt (f)) + " dB";
         if (showRef && refLoaded) txt += "   Ref " + fmt (refA.valueAt (f)) + " dB";
         if (drawDiff && ! diff.empty())
@@ -353,7 +663,7 @@ void SpectrumView::paint (juce::Graphics& g)
         const float tw = (float) juce::GlyphArrangement::getStringWidth (g.getCurrentFont(), txt) + 16.0f;
         float tx = mouse.x + 10.0f;
         if (tx + tw > plot.getRight()) tx = mouse.x - tw - 10.0f;
-        auto box = juce::Rectangle<float> (tx, plot.getY() + 24.0f, tw, 22.0f);
+        auto box = juce::Rectangle<float> (tx, curveR.getY() + 24.0f, tw, 22.0f);
         g.setColour (col::panel2.withAlpha (0.92f));
         g.fillRoundedRectangle (box, 4.0f);
         g.setColour (col::line);
@@ -376,9 +686,9 @@ void LoudnessPanel::paint (juce::Graphics& g)
     const float cMixX = labW, cRefX = labW + colW + 6.0f;
 
     g.setFont (font (12.0f, true));
-    g.setColour (col::gold);
+    g.setColour (theme().mix);
     g.drawText ("MIX", juce::Rectangle<float> (cMixX, 0, colW, 16), juce::Justification::centredRight);
-    g.setColour (col::ref);
+    g.setColour (theme().ref);
     g.drawText ("REFERENZ", juce::Rectangle<float> (cRefX, 0, colW, 16), juce::Justification::centredRight);
 
     const bool hasTarget = r.target < 100.0f;
@@ -455,7 +765,7 @@ void LoudnessPanel::paint (juce::Graphics& g)
         };
 
         value (row.mix, juce::Rectangle<float> (cMixX, y + 1, colW, row.h - 2), col::text);
-        value (row.ref, juce::Rectangle<float> (cRefX, y + 1, colW, row.h - 2), col::ref.brighter (0.35f));
+        value (row.ref, juce::Rectangle<float> (cRefX, y + 1, colW, row.h - 2), theme().ref.brighter (0.35f));
         y += row.h;
     }
 
@@ -520,22 +830,22 @@ void LoudnessPanel::paint (juce::Graphics& g)
 
 //==============================================================================
 // PEGEL
-void MeterPanel::Bar::feed (float pk, float rmsV)
+void MeterPanel::Bar::feed (float pk, float rmsV, int holdFrames)
 {
     peak = juce::jmax (pk, peak - 1.0f);
     if (pk >= hold) { hold = pk; holdAge = 0; }
-    else if (++holdAge > 45) hold = juce::jmax (peak, hold - 1.2f);
+    else if (++holdAge > holdFrames) hold = juce::jmax (peak, hold - 1.2f);
     rms = rmsV;
 }
 
 void MeterPanel::tick (AnalyzerProcessor& p)
 {
     auto db = [] (float v) { return juce::Decibels::gainToDecibels (v, -100.0f); };
-    mL.feed (db (p.mixLevels.peakL.exchange (0.0f)), db (p.mixLevels.rmsL.load()));
-    mR.feed (db (p.mixLevels.peakR.exchange (0.0f)), db (p.mixLevels.rmsR.load()));
+    mL.feed (db (p.mixLevels.peakL.exchange (0.0f)), db (p.mixLevels.rmsL.load()), holdFrames);
+    mR.feed (db (p.mixLevels.peakR.exchange (0.0f)), db (p.mixLevels.rmsR.load()), holdFrames);
     refRunning = p.isRefRunning();
-    rL.feed (db (p.refLevels.peakL.exchange (0.0f)), refRunning ? db (p.refLevels.rmsL.load()) : -100.0f);
-    rR.feed (db (p.refLevels.peakR.exchange (0.0f)), refRunning ? db (p.refLevels.rmsR.load()) : -100.0f);
+    rL.feed (db (p.refLevels.peakL.exchange (0.0f)), refRunning ? db (p.refLevels.rmsL.load()) : -100.0f, holdFrames);
+    rR.feed (db (p.refLevels.peakR.exchange (0.0f)), refRunning ? db (p.refLevels.rmsR.load()) : -100.0f, holdFrames);
     mixM = p.mixLoud.m.load();
     refM = refRunning ? p.refLoud.m.load() : -100.0f;
     mixCorr = p.mixLevels.corr.load();
@@ -544,50 +854,71 @@ void MeterPanel::tick (AnalyzerProcessor& p)
     refMax = db (p.refLevels.maxPeak.load());
 }
 
-void MeterPanel::paint (juce::Graphics& g)
+juce::Colour MeterPanel::segColour (float db, juce::Colour c) const
 {
-    const float top = 34.0f, bottom = (float) getHeight() - 50.0f, hgt = bottom - top;
-    auto yOf = [&] (float db) { return top + (1.0f - (juce::jlimit (-60.0f, 3.0f, db) + 60.0f) / 63.0f) * hgt; };
-
-    auto drawBar = [&] (float x, float w, const Bar& b, juce::Colour c)
+    if (db > 0.0f) return col::red;
+    if (style == 0)   // Ampel
     {
-        g.setColour (col::plot);
-        g.fillRect (juce::Rectangle<float> (x, top, w, hgt));
-        if (b.rms > -60.0f)
+        if (db > -6.0f)  return col::warn;
+        if (db > -18.0f) return juce::Colour (0xffe8c547);
+        return juce::Colour (0xff4fc36b);
+    }
+    const float t = juce::jlimit (0.0f, 1.0f, (db - floorDb) / -floorDb);
+    return c.darker (0.35f).interpolatedWith (c.brighter (0.55f), t);
+}
+
+void MeterPanel::drawMeter (juce::Graphics& g, juce::Rectangle<float> r, const Bar& b, juce::Colour c) const
+{
+    const float top = r.getY(), bottom = r.getBottom(), hgt = r.getHeight(), hi = 3.0f;
+    auto yOf  = [&] (float db) { return top + (1.0f - (juce::jlimit (floorDb, hi, db) - floorDb) / (hi - floorDb)) * hgt; };
+    auto dbAt = [&] (float y)  { return floorDb + (1.0f - (y - top) / hgt) * (hi - floorDb); };
+
+    g.setColour (col::plot);
+    g.fillRect (r);
+
+    if (style == 2)   // Balken glatt
+    {
+        if (b.rms > floorDb)
         {
             const float yr = yOf (b.rms);
-            juce::ColourGradient grad (c.darker (0.3f), 0, bottom, c, 0, top, false);
+            juce::ColourGradient grad (c.darker (0.3f), 0, bottom, c.brighter (0.2f), 0, top, false);
             g.setGradientFill (grad);
-            g.fillRect (juce::Rectangle<float> (x, yr, w, bottom - yr));
+            g.fillRect (juce::Rectangle<float> (r.getX(), yr, r.getWidth(), bottom - yr));
         }
-        if (b.peak > -60.0f)
+        if (b.peak > floorDb)
         {
             const float yp = yOf (b.peak);
             g.setColour (c.withAlpha (0.25f));
-            g.fillRect (juce::Rectangle<float> (x, yp, w, bottom - yp));
+            g.fillRect (juce::Rectangle<float> (r.getX(), yp, r.getWidth(), bottom - yp));
             g.setColour (b.peak > 0.0f ? col::red : c.brighter (0.5f).withAlpha (0.9f));
-            g.fillRect (juce::Rectangle<float> (x, yp, w, juce::jmin (3.0f, bottom - yp)));
+            g.fillRect (juce::Rectangle<float> (r.getX(), yp, r.getWidth(), juce::jmin (3.0f, bottom - yp)));
         }
-        if (b.hold > -60.0f)
-        {
-            g.setColour (b.hold > 0.0f ? col::red : col::text);
-            g.fillRect (juce::Rectangle<float> (x, yOf (b.hold) - 0.5f, w, 1.5f));
-        }
-    };
-
-    auto drawLufs = [&] (float x, float w, float v, juce::Colour c)
+    }
+    else              // LED-Segmente
     {
-        g.setColour (col::plot);
-        g.fillRect (juce::Rectangle<float> (x, top, w, hgt));
-        if (v > -60.0f)
+        const float segH = 3.0f, gap = 1.0f;
+        for (float y = bottom - segH; y >= top - 0.5f; y -= segH + gap)
         {
-            const float y = yOf (v);
-            g.setColour (c.withAlpha (0.75f));
-            g.fillRect (juce::Rectangle<float> (x, y, w, bottom - y));
-            g.setColour (c.brighter (0.6f));
-            g.fillRect (juce::Rectangle<float> (x, y, w, 2.0f));
+            const float sdb = dbAt (y + segH * 0.5f);
+            const auto sc = segColour (sdb, c);
+            if (sdb <= b.rms)       g.setColour (sc);
+            else if (sdb <= b.peak) g.setColour (sc.withAlpha (0.5f));
+            else                    g.setColour (sc.withAlpha (0.07f));
+            g.fillRect (r.getX(), y, r.getWidth(), segH);
         }
-    };
+    }
+
+    if (b.hold > floorDb)
+    {
+        g.setColour (b.hold > 0.0f ? col::red : col::text);
+        g.fillRect (juce::Rectangle<float> (r.getX(), yOf (b.hold) - 1.0f, r.getWidth(), 2.0f));
+    }
+}
+
+void MeterPanel::paint (juce::Graphics& g)
+{
+    const float top = 34.0f, bottom = (float) getHeight() - 50.0f, hgt = bottom - top, hi = 3.0f;
+    auto yOf = [&] (float db) { return top + (1.0f - (juce::jlimit (floorDb, hi, db) - floorDb) / (hi - floorDb)) * hgt; };
 
     auto group = [&] (float gx, const char* title, const Bar& l, const Bar& r, float m, float mx, float corr,
                       juce::Colour c, bool active)
@@ -599,9 +930,11 @@ void MeterPanel::paint (juce::Graphics& g)
         g.setColour (mx > 0.0f ? col::red : col::text.withAlpha (active ? 0.9f : 0.4f));
         g.drawText (u8s ("Peak ") + fmt (mx), juce::Rectangle<float> (gx, 15, 70, 14), juce::Justification::centredLeft);
 
-        drawBar (gx, 22.0f, l, c);
-        drawBar (gx + 26.0f, 22.0f, r, c);
-        drawLufs (gx + 58.0f, 24.0f, m, c);
+        drawMeter (g, { gx, top, 22.0f, hgt }, l, c);
+        drawMeter (g, { gx + 26.0f, top, 22.0f, hgt }, r, c);
+        Bar lufs;
+        lufs.rms = lufs.peak = m;
+        drawMeter (g, { gx + 58.0f, top, 24.0f, hgt }, lufs, c);
 
         g.setFont (font (10.0f, true));
         g.setColour (col::dim);
@@ -613,7 +946,9 @@ void MeterPanel::paint (juce::Graphics& g)
 
         const float cy = bottom + 22.0f;
         auto cr = juce::Rectangle<float> (gx, cy, 130.0f, 8.0f);
-        g.setColour (col::plot);
+        juce::ColourGradient cg (col::red.withAlpha (0.35f), cr.getX(), 0, col::good.withAlpha (0.35f), cr.getRight(), 0, false);
+        cg.addColour (0.5, col::plot);
+        g.setGradientFill (cg);
         g.fillRoundedRectangle (cr, 3.0f);
         g.setColour (col::line);
         g.drawVerticalLine ((int) cr.getCentreX(), cr.getY() - 2, cr.getBottom() + 2);
@@ -631,19 +966,28 @@ void MeterPanel::paint (juce::Graphics& g)
         g.drawText ("+1", juce::Rectangle<float> (gx + 110, cy + 10, 20, 11), juce::Justification::centredRight);
     };
 
-    group (12.0f, "MIX", mL, mR, mixM, mixMax, mixCorr, col::gold, true);
-    group ((float) getWidth() - 142.0f, "REFERENZ", rL, rR, refM, refRunning ? refMax : -100.0f, refCorr, col::ref, refRunning);
+    group (12.0f, "MIX", mL, mR, mixM, mixMax, mixCorr, theme().mix, true);
+    group ((float) getWidth() - 142.0f, "REFERENZ", rL, rR, refM, refRunning ? refMax : -100.0f, refCorr, theme().ref, refRunning);
+
+    static const std::vector<int> s60 { 0, -6, -12, -18, -24, -30, -36, -48, -60 };
+    static const std::vector<int> s48 { 0, -3, -6, -9, -12, -18, -24, -30, -36, -48 };
+    static const std::vector<int> s24 { 0, -3, -6, -9, -12, -15, -18, -21, -24 };
+    const auto& scale = floorDb <= -59.0f ? s60 : (floorDb <= -47.0f ? s48 : s24);
 
     const float sx = (float) getWidth() * 0.5f - 22.0f;
     g.setFont (font (10.0f));
-    for (int db : { 0, -6, -12, -18, -24, -30, -36, -48, -60 })
+    for (int db : scale)
     {
         const float y = yOf ((float) db);
-        g.setColour (col::line);
+        g.setColour (db == 0 ? col::red.withAlpha (0.7f) : col::line);
         g.drawHorizontalLine ((int) y, sx, sx + 6.0f);
         g.setColour (col::dim);
         g.drawText (juce::String (db), juce::Rectangle<float> (sx + 8.0f, y - 6.0f, 30.0f, 12.0f), juce::Justification::centredLeft);
     }
+    g.setFont (font (9.0f));
+    g.setColour (col::dim.withAlpha (0.7f));
+    g.drawText (u8s ("Klick = Reset"), juce::Rectangle<float> ((float) getWidth() * 0.5f - 36.0f, bottom + 3.0f, 72.0f, 11.0f),
+                juce::Justification::centred);
 }
 
 //==============================================================================
@@ -699,8 +1043,8 @@ void HistoryView::paint (juce::Graphics& g)
         g.strokePath (p, juce::PathStrokeType (th, juce::PathStrokeType::curved));
     };
 
-    drawLine (ref, col::ref, 1.6f);
-    drawLine (mix, col::gold, 1.8f);
+    drawLine (ref, theme().ref, 1.6f);
+    drawLine (mix, theme().mix, 1.8f);
 }
 
 //==============================================================================
@@ -765,8 +1109,8 @@ void ScopeView::paint (juce::Graphics& g)
             if (sq.contains (x, y)) g.fillRect (x, y, 1.5f, 1.5f);
         }
     };
-    if (showRef && refRunning) dots (rL, rR, col::ref);
-    dots (mL, mR, col::gold);
+    if (showRef && refRunning) dots (rL, rR, theme().ref);
+    dots (mL, mR, theme().mix);
 
     // Kennzahlen
     auto stats = [&] (const std::vector<float>& L, const std::vector<float>& R, float& sm)
@@ -791,17 +1135,17 @@ void ScopeView::paint (juce::Graphics& g)
         g.setFont (font (11.0f, true));
         g.setColour (col::text.withAlpha (0.85f));
         g.drawText (label, tx, juce::Justification::centredLeft);
-        g.setColour (col::gold);
+        g.setColour (theme().mix);
         g.drawText (v1, tx.withTrimmedRight (52.0f), juce::Justification::centredRight);
-        g.setColour (col::ref);
+        g.setColour (theme().ref);
         g.drawText (v2, tx, juce::Justification::centredRight);
         tx.translate (0.0f, 20.0f);
     };
 
     g.setFont (font (10.5f, true));
-    g.setColour (col::gold);
+    g.setColour (theme().mix);
     g.drawText ("MIX", tx.withTrimmedRight (52.0f), juce::Justification::centredRight);
-    g.setColour (col::ref);
+    g.setColour (theme().ref);
     g.drawText ("REF", tx, juce::Justification::centredRight);
     tx.translate (0.0f, 18.0f);
 
@@ -944,20 +1288,20 @@ void WaveView::paint (juce::Graphics& g)
     {
         const bool conn = proc.isLiveConnected();
         const bool sig = conn && proc.hasLiveSignal();
-        g.setColour (sig ? col::ref : col::line.brighter (0.3f));
+        g.setColour (sig ? theme().ref : col::line.brighter (0.3f));
         g.drawRoundedRectangle (b.reduced (1.0f), 4.0f, sig ? 2.0f : 1.2f);
 
         auto r = b.reduced (14.0f, 8.0f);
         g.setFont (font (15.0f, true));
-        g.setColour (sig ? col::ref : col::text);
+        g.setColour (sig ? theme().ref : col::text);
         const float pulse = sig ? 0.6f + 0.4f * (float) std::sin (juce::Time::getMillisecondCounter() * 0.006) : 0.25f;
         g.setColour ((sig ? col::red : col::dim).withAlpha (pulse));
         g.fillEllipse (r.getX(), r.getY() + 5.0f, 10.0f, 10.0f);
-        g.setColour (sig ? col::ref : col::text);
+        g.setColour (sig ? theme().ref : col::text);
         g.drawText (u8s ("LIVE-REFERENZ  ·  Sidechain"), r.withTrimmedLeft (16.0f).withHeight (20.0f), juce::Justification::centredLeft);
 
         g.setFont (font (12.5f, true));
-        g.setColour (sig ? col::good : (conn ? col::goldHi : col::warn));
+        g.setColour (sig ? col::good : (conn ? theme().mix.brighter (0.4f) : col::warn));
         g.drawText (sig ? u8s ("Signal da – wird live gemessen, nichts wird aufgenommen")
                         : (conn ? u8s ("Sidechain verbunden – warte auf Signal") : u8s ("Kein Sidechain verbunden")),
                     r.withHeight (20.0f), juce::Justification::centredRight);
@@ -988,7 +1332,7 @@ void WaveView::paint (juce::Graphics& g)
         g.fillPath (dashed);
 
         g.setFont (font (14.0f, true));
-        g.setColour (dragHover ? col::goldHi : col::text.withAlpha (0.75f));
+        g.setColour (dragHover ? theme().mix.brighter (0.4f) : col::text.withAlpha (0.75f));
         juce::String msg = u8s ("Slot ") + juce::String (proc.currentSlot() + 1)
                          + u8s (": Referenz-Track hierher ziehen oder LADEN klicken");
         if (loadingHere) msg = proc.getRefMessage();
@@ -1015,11 +1359,11 @@ void WaveView::paint (juce::Graphics& g)
         for (int i = i0; i < i1 && i < n; ++i) m = juce::jmax (m, ref->wave[(size_t) i]);
         const float h = juce::jmin (1.0f, m) * wr.getHeight() * 0.5f;
         const float px = wr.getX() + (float) x;
-        g.setColour (px < playX ? col::ref.withAlpha (0.85f) : col::ref.withAlpha (0.38f));
+        g.setColour (px < playX ? theme().ref.withAlpha (0.85f) : theme().ref.withAlpha (0.38f));
         g.fillRect (px, mid - h, 1.0f, juce::jmax (1.0f, 2.0f * h));
     }
 
-    g.setColour (col::goldHi);
+    g.setColour (theme().mix.brighter (0.4f));
     g.fillRect (playX - 1.0f, wr.getY() - 2.0f, 2.0f, wr.getHeight() + 4.0f);
 
     g.setFont (font (12.5f, true));
@@ -1050,6 +1394,159 @@ void WaveView::seek (const juce::MouseEvent& e)
 }
 
 //==============================================================================
+// ANSICHT
+ViewPanel::ViewPanel()
+{
+    auto combo = [this] (juce::ComboBox& cb, std::initializer_list<const char*> items)
+    {
+        int id = 1;
+        for (auto* t : items) cb.addItem (u8s (t), id++);
+        cb.onChange = [this] { changed(); };
+        addAndMakeVisible (cb);
+    };
+    auto toggle = [this] (juce::TextButton& b)
+    {
+        b.setClickingTogglesState (true);
+        b.onClick = [this, &b] { b.setButtonText (b.getToggleState() ? "AN" : "AUS"); changed(); };
+        addAndMakeVisible (b);
+    };
+
+    combo (cbMode,  { "Kurve", "Balken (Terzbänder)", "Spektrogramm + Kurve" });
+    combo (cbRange, { "96 dB  (+6 bis -90)", "78 dB  (+6 bis -72)", "66 dB  (+6 bis -60)", "48 dB  (0 bis -48)" });
+    combo (cbLine,  { "Dünn", "Normal", "Dick" });
+    combo (cbFill,  { "Aus", "Leicht", "Kräftig" });
+    combo (cbGrid,  { "Dezent", "Normal", "Kräftig" });
+    cbTheme.onChange = [this] { changed(); };
+    for (int i = 0; i < ViewStyle::numThemes; ++i) cbTheme.addItem (u8s (themeName (i)), i + 1);
+    addAndMakeVisible (cbTheme);
+    combo (cbMeter, { "LED Ampel (grün / gelb / rot)", "LED in Themenfarbe", "Balken glatt" });
+    combo (cbMeterRange, { "60 dB  (0 bis -60)", "48 dB  (0 bis -48)", "24 dB  (0 bis -24, Mastering)" });
+    combo (cbHold,  { "1 Sekunde", "3 Sekunden", "Bis Klick / Reset" });
+    combo (cbLayout, { "Standard", "Großes Spektrum" });
+    toggle (btnGlow);
+    toggle (btnPeaks);
+
+    btnDefaults.setButtonText ("STANDARD");
+    btnDefaults.onClick = [this] { setStyle (ViewStyle {}); changed(); };
+    addAndMakeVisible (btnDefaults);
+    btnClose.setButtonText ("FERTIG");
+    btnClose.setToggleState (true, juce::dontSendNotification);
+    btnClose.onClick = [this] { setVisible (false); };
+    addAndMakeVisible (btnClose);
+
+    left  = { { "#SPEKTRUM" }, { "Darstellung", &cbMode }, { "dB-Bereich", &cbRange }, { "Linienstärke", &cbLine },
+              { "Füllung", &cbFill }, { "Raster", &cbGrid }, { "Leuchten", &btnGlow }, { "Spitzen markieren", &btnPeaks } };
+    right = { { "#FARBEN" }, { "Farbschema", &cbTheme }, { "#PEGEL" }, { "Stil", &cbMeter }, { "Bereich", &cbMeterRange },
+              { "Peak-Hold", &cbHold }, { "#LAYOUT" }, { "Aufteilung", &cbLayout } };
+}
+
+void ViewPanel::setStyle (const ViewStyle& s)
+{
+    loading = true;
+    cbMode.setSelectedItemIndex (s.specMode, juce::dontSendNotification);
+    cbRange.setSelectedItemIndex (s.range, juce::dontSendNotification);
+    cbLine.setSelectedItemIndex (s.line, juce::dontSendNotification);
+    cbFill.setSelectedItemIndex (s.fill, juce::dontSendNotification);
+    cbGrid.setSelectedItemIndex (s.grid, juce::dontSendNotification);
+    cbTheme.setSelectedItemIndex (s.theme, juce::dontSendNotification);
+    cbMeter.setSelectedItemIndex (s.meterStyle, juce::dontSendNotification);
+    cbMeterRange.setSelectedItemIndex (s.meterRange, juce::dontSendNotification);
+    cbHold.setSelectedItemIndex (s.hold, juce::dontSendNotification);
+    cbLayout.setSelectedItemIndex (s.layout, juce::dontSendNotification);
+    btnGlow.setToggleState (s.glow, juce::dontSendNotification);
+    btnPeaks.setToggleState (s.peaks, juce::dontSendNotification);
+    btnGlow.setButtonText (s.glow ? "AN" : "AUS");
+    btnPeaks.setButtonText (s.peaks ? "AN" : "AUS");
+    loading = false;
+}
+
+ViewStyle ViewPanel::getStyle() const
+{
+    ViewStyle s;
+    s.specMode   = juce::jmax (0, cbMode.getSelectedItemIndex());
+    s.range      = juce::jmax (0, cbRange.getSelectedItemIndex());
+    s.line       = juce::jmax (0, cbLine.getSelectedItemIndex());
+    s.fill       = juce::jmax (0, cbFill.getSelectedItemIndex());
+    s.grid       = juce::jmax (0, cbGrid.getSelectedItemIndex());
+    s.theme      = juce::jmax (0, cbTheme.getSelectedItemIndex());
+    s.meterStyle = juce::jmax (0, cbMeter.getSelectedItemIndex());
+    s.meterRange = juce::jmax (0, cbMeterRange.getSelectedItemIndex());
+    s.hold       = juce::jmax (0, cbHold.getSelectedItemIndex());
+    s.layout     = juce::jmax (0, cbLayout.getSelectedItemIndex());
+    s.glow       = btnGlow.getToggleState();
+    s.peaks      = btnPeaks.getToggleState();
+    return s;
+}
+
+void ViewPanel::changed()
+{
+    if (! loading && onChange)
+        onChange (getStyle());
+}
+
+void ViewPanel::resized()
+{
+    box = getLocalBounds().toFloat().withSizeKeepingCentre (800.0f, 404.0f);
+    labels.clear();
+    headers.clear();
+
+    auto place = [this] (std::vector<Row>& rows, float x)
+    {
+        float y = box.getY() + 70.0f;
+        for (auto& r : rows)
+        {
+            if (r.comp == nullptr)
+                headers.push_back ({ u8s (r.label + 1), { x, y + 6.0f, 340.0f, 20.0f } });
+            else
+            {
+                labels.push_back ({ u8s (r.label), { x, y + 2.0f, 140.0f, 26.0f } });
+                const bool isToggle = dynamic_cast<juce::TextButton*> (r.comp) != nullptr;
+                r.comp->setBounds ((int) x + 146, (int) y + 3, isToggle ? 70 : 214, 26);
+            }
+            y += 34.0f;
+        }
+    };
+    place (left, box.getX() + 30.0f);
+    place (right, box.getX() + 420.0f);
+
+    btnDefaults.setBounds ((int) box.getX() + 30, (int) box.getBottom() - 46, 110, 30);
+    btnClose.setBounds ((int) box.getRight() - 140, (int) box.getBottom() - 46, 110, 30);
+}
+
+void ViewPanel::paint (juce::Graphics& g)
+{
+    g.fillAll (juce::Colours::black.withAlpha (0.6f));
+    g.setColour (col::panel);
+    g.fillRoundedRectangle (box, 8.0f);
+    g.setColour (col::gold);
+    g.drawRoundedRectangle (box, 8.0f, 1.5f);
+
+    g.setFont (font (20.0f, true));
+    g.drawText ("ANSICHT", box.reduced (30.0f, 18.0f).withHeight (24.0f), juce::Justification::centredLeft);
+    g.setFont (font (11.5f));
+    g.setColour (col::dim);
+    g.drawText (u8s ("Änderungen wirken sofort und gelten für alle Projekte"), box.reduced (30.0f, 18.0f).withHeight (24.0f),
+                juce::Justification::centredRight);
+
+    g.setColour (col::line);
+    g.drawVerticalLine ((int) box.getX() + 400, box.getY() + 74.0f, box.getBottom() - 64.0f);
+
+    for (auto& h : headers)
+    {
+        g.setColour (col::goldHi);
+        g.setFont (font (12.0f, true));
+        g.drawText (h.first, h.second, juce::Justification::centredLeft);
+    }
+    for (auto& l : labels)
+    {
+        g.setColour (col::text.withAlpha (0.85f));
+        g.setFont (font (12.5f));
+        g.drawText (l.first, l.second, juce::Justification::centredLeft);
+    }
+
+}
+
+//==============================================================================
 void HelpOverlay::paint (juce::Graphics& g)
 {
     g.fillAll (juce::Colours::black.withAlpha (0.88f));
@@ -1069,6 +1566,10 @@ void HelpOverlay::paint (juce::Graphics& g)
          "PRO: DIFFERENZ zeigt Mix minus Referenz (lila, eigene Skala rechts). TEMPO \"Langzeit\" mittelt seit dem letzten Reset – "
          "die Referenz zeigt dann das Mittel über den ganzen Song. KANAL: L+R, Links, Rechts oder Side. "
          "AUFLÖSUNG: mehr FFT-Punkte für feine Bässe. NEIGUNG 4,5 dB/Okt.: ausgewogene Mixe liegen ungefähr waagerecht.\n\n", 13.5f, col::text);
+    add ("ANSICHT  ", 13.5f, col::goldHi, true);
+    add ("Darstellung als Kurve, Terzband-Balken oder Spektrogramm, dB-Bereich, Linien, Füllung, Leuchten, Spitzen-Markierung, "
+         "5 Farbschemata, Pegel als LED oder Balken mit wählbarem Bereich und Peak-Hold, Layout \"Großes Spektrum\". "
+         "Klick auf die Pegel setzt die Spitzen zurück.\n\n", 13.5f, col::text);
     add ("Tonale Balance  ", 13.5f, col::goldHi, true);
     add ("Vergleicht 6 Frequenzbereiche deines Mixes mit der Referenz, unabhängig von der Lautstärke. "
          "Grün = passt (±1,5 dB), Gelb = etwas, Orange = deutlich. + heißt: dein Mix hat dort mehr.\n\n", 13.5f, col::text);
@@ -1251,12 +1752,56 @@ Content::Content (AnalyzerProcessor& p) : proc (p)
     addAndMakeVisible (wave);
     addChildComponent (help);
 
+    btnView.setButtonText ("ANSICHT");
+    btnView.setTooltip (u8s ("Darstellung, Farben, Pegel und Layout einstellen"));
+    btnView.onClick = [this] { showView (true); };
+    addAndMakeVisible (btnView);
+    viewPanel.onChange = [this] (const ViewStyle& st) { applyStyle (st, true); };
+    addChildComponent (viewPanel);
+
+    meters.onClick = [this]
+    {
+        proc.mixLevels.maxPeak.store (0.0f);
+        proc.refLevels.maxPeak.store (0.0f);
+        meters.resetHolds();
+    };
+
     pullL.resize (1 << 17);
     pullR.resize (1 << 17);
     mono.resize (1 << 17);
     pro = proc.getProMode();
     setSize (W, H);
+    style.load (proc.getSettings());
+    applyStyle (style, false);
+}
+
+void Content::applyStyle (const ViewStyle& s, bool save)
+{
+    style = s;
+    if (save) style.save (proc.getSettings());
+    currentThemeIndex() = s.theme;
+    spectrum.setStyle (s);
+    meters.style = s.meterStyle;
+    meters.floorDb = s.meterFloor();
+    meters.holdFrames = s.holdFrames();
+    bigSpec = s.layout == 1;
+
+    const auto& th = theme();
+    for (auto* b : { &btnA, &btnShowMix }) setAccent (*b, th.mix);
+    for (auto* b : { &btnB, &btnShowRef, &btnMatch, &btnLive }) setAccent (*b, th.ref);
+    for (auto& b : btnSlot) setAccent (b, th.ref);
+    setAccent (btnShowDiff, th.diff);
+
     updateVisibility();
+    resized();
+    repaint();
+}
+
+void Content::showView (bool s)
+{
+    if (s) viewPanel.setStyle (style);
+    viewPanel.setVisible (s);
+    if (s) viewPanel.toFront (false);
 }
 
 Content::~Content() = default;
@@ -1307,8 +1852,11 @@ void Content::updateVisibility()
         c->setVisible (pro);
 
     const bool showScope = pro && scopeTab;
-    scope.setVisible (showScope);
-    history.setVisible (! showScope);
+    scope.setVisible (showScope && ! bigSpec);
+    history.setVisible (! showScope && ! bigSpec);
+    tonal.setVisible (! bigSpec);
+    btnTabHist.setVisible (pro && ! bigSpec);
+    btnTabScope.setVisible (pro && ! bigSpec);
     btnTabHist.setToggleState (! showScope, juce::dontSendNotification);
     btnTabScope.setToggleState (showScope, juce::dontSendNotification);
     loud.pro = pro;
@@ -1417,7 +1965,7 @@ void Content::exportReport()
 void Content::resized()
 {
     rHeader = { 0, 0, W, 58 };
-    rSpec   = { 12, 66, 880, 400 };
+    rSpec   = { 12, 66, 880, bigSpec ? 580 : 400 };
     rTonal  = { 12, 474, 520, 172 };
     rHist   = { 540, 474, 352, 172 };
     rLoud   = { 904, 66, 364, 330 };
@@ -1425,6 +1973,7 @@ void Content::resized()
     rRef    = { 12, 654, 1256, 134 };
 
     btnSimple.setBounds (258, 17, 76, 26);
+    btnView.setBounds (396, 17, 64, 26);
     btnPro.setBounds (338, 17, 52, 26);
     btnA.setBounds (466, 11, 170, 36);
     btnB.setBounds (642, 11, 200, 36);
@@ -1480,6 +2029,7 @@ void Content::resized()
     cbBand.setBounds (x0 + 168, ry + 100, 186, 24);
 
     help.setBounds (getLocalBounds());
+    viewPanel.setBounds (getLocalBounds());
 }
 
 void Content::panel (juce::Graphics& g, juce::Rectangle<int> r, const juce::String& title) const
@@ -1538,13 +2088,16 @@ void Content::paint (juce::Graphics& g)
     else
         g.drawText (u8s ("20 Hz – 20 kHz"), rSpec.getX() + 430, rSpec.getY() + 13, 120, 12, juce::Justification::centredLeft);
 
-    panel (g, rTonal, u8s ("TONALE BALANCE  ·  Mix gegenüber Referenz"));
-    panel (g, rHist, pro && scopeTab ? u8s ("STEREO") : u8s ("VERLAUF  ·  Short-Term, 60 s"));
+    if (! bigSpec)
+    {
+        panel (g, rTonal, u8s ("TONALE BALANCE  ·  Mix gegenüber Referenz"));
+        panel (g, rHist, pro && scopeTab ? u8s ("STEREO") : u8s ("VERLAUF  ·  Short-Term, 60 s"));
+    }
     panel (g, rLoud, u8s ("LAUTHEIT"));
     panel (g, rMeter, u8s ("PEGEL"));
     panel (g, rRef, {});
 
-    g.setColour (col::ref);
+    g.setColour (theme().ref);
     g.setFont (font (12.0f, true));
     g.drawText ("REFERENZ", rRef.getX() + 12, rRef.getY() + 8, 132, 20, juce::Justification::centredLeft);
 
@@ -1623,6 +2176,7 @@ void Content::tick()
     const bool refPresent = ref != nullptr || (live && proc.isLiveConnected());
     const bool useStatic = ref != nullptr && channel == 0 && speedIdx == 3 && ! ref->longTermDb.empty();
 
+    mixA.wantInstant = spectrum.mode == 2;
     mixA.update (slopes[slopeIdx], smooths[smoothIdx], speedIdx, hold);
     refA.update (slopes[slopeIdx], smooths[smoothIdx], speedIdx, hold,
                  useStatic ? &ref->longTermDb : nullptr, proc.getRefGainDb());
@@ -1724,8 +2278,9 @@ void Content::tick()
     if ((bool) cbBand.getProperties().getWithDefault ("alert", false) != bandAlert)
         { cbBand.getProperties().set ("alert", bandAlert); cbBand.repaint(); }
 
+    spectrum.advance (style.holdFrames());
     spectrum.repaint();
-    tonal.repaint();
+    if (tonal.isVisible()) tonal.repaint();
     loud.repaint();
     meters.repaint();
     if (history.isVisible()) history.repaint();

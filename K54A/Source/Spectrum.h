@@ -156,6 +156,7 @@ public:
         avgPow.assign ((size_t) size / 2 + 1, 0.0);
         avgFrames = 0;
         display.assign (numPoints, floorDb);
+        instant.assign (numPoints, floorDb);
         hold.assign (numPoints, floorDb);
         target.assign (numPoints, floorDb);
         freq.resize (numPoints);
@@ -257,6 +258,27 @@ public:
             if (holdOn) hold[(size_t) p] = std::max (hold[(size_t) p], d);
             else        hold[(size_t) p] = d;
         }
+
+        // Momentan-Kurve fürs Spektrogramm (auch wenn die Anzeige auf Langzeit steht)
+        if (longTerm && wantInstant)
+        {
+            if (fresh)
+            {
+                SpecMath::pointsFromPower (power, size, sampleRate, smoothOct, smoothOct <= 0.0f, instTmp);
+                for (int p = 0; p < numPoints; ++p)
+                {
+                    float t = instTmp[(size_t) p];
+                    if (t > floorDb + 1.0f) t += slopeDbPerOct * octFrom1k[(size_t) p];
+                    float& d = instant[(size_t) p];
+                    d += (t > d ? 0.55f : 0.09f) * (t - d);
+                }
+            }
+            else
+                for (auto& d : instant) d += 0.09f * (floorDb - d);
+        }
+        else
+            instant = display;
+
         lastFresh = fresh;
     }
 
@@ -279,14 +301,14 @@ public:
         return display[(size_t) i] * (1.0f - fr) + display[(size_t) i + 1] * fr;
     }
 
-    std::vector<float> display, hold, freq;
-    bool lastFresh = false;
+    std::vector<float> display, hold, freq, instant;
+    bool lastFresh = false, wantInstant = false;
 
 private:
     double sampleRate = 48000.0;
     int res = 0, order = 13, size = 8192;
     std::unique_ptr<juce::dsp::FFT> fft;
-    std::vector<float> window, ring, fftData, power, target, octFrom1k, avgTmp;
+    std::vector<float> window, ring, fftData, power, target, octFrom1k, avgTmp, instTmp;
     std::vector<double> avgPow;
     float windowSum = 1.0f;
     int writePos = 0, newSamples = 0, avgFrames = 0;

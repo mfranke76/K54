@@ -5,6 +5,7 @@
 #include <juce_gui_extra/juce_gui_extra.h>
 #include "PluginProcessor.h"
 #include "Spectrum.h"
+#include "ViewStyle.h"
 
 namespace k54a
 {
@@ -58,27 +59,47 @@ struct Readouts
 class SpectrumView : public juce::Component
 {
 public:
+    static constexpr int numBars = 31;   // Terzbänder 20 Hz – 20 kHz
+
     SpectrumView (SpectrumAnalyser& mix, SpectrumAnalyser& ref) : mixA (mix), refA (ref) {}
     void paint (juce::Graphics&) override;
     void mouseMove (const juce::MouseEvent&) override;
     void mouseExit (const juce::MouseEvent&) override;
+    void setStyle (const ViewStyle&);
+    void advance (int holdFrames);       // einmal pro Bildschirm-Takt
+    void clearHistory();
 
     bool showMix = true, showRef = true, showDiff = false, holdOn = false, refLoaded = false, longTerm = false;
     juce::String channelName;
-
-    static constexpr float topDb = 6.0f, botDb = -90.0f;
+    float topDb = 6.0f, botDb = -90.0f;
+    int mode = 0;
 
 private:
     float xForFreq (float f, juce::Rectangle<float> r) const;
     float yForDb (float db, juce::Rectangle<float> r) const;
     juce::Path makePath (const std::vector<float>& v, juce::Rectangle<float> r, bool closed) const;
     void computeDiff();
+    void computeBars (const std::vector<float>& src, std::array<float, numBars>& out) const;
+    void strokeCurve (juce::Graphics&, const juce::Path&, juce::Colour, float width) const;
+    void drawCurves (juce::Graphics&, juce::Rectangle<float> r);
+    void drawBars (juce::Graphics&, juce::Rectangle<float> r);
+    void drawSpectrogram (juce::Graphics&, juce::Rectangle<float> r);
+    void drawPeakLabels (juce::Graphics&, juce::Rectangle<float> r);
+    juce::Colour gridCol (juce::Colour base) const;
 
     SpectrumAnalyser& mixA;
     SpectrumAnalyser& refA;
     std::vector<float> diff, diffTmp;
     juce::Point<float> mouse;
     bool mouseIn = false;
+
+    int gridLevel = 1;
+    float lineW = 1.8f, fillA = 0.38f;
+    bool glow = true, peaks = true;
+    std::array<float, numBars> barMix {}, barRef {}, barHoldMix {};
+    std::array<int, numBars> barHoldAge {};
+    juce::Image sgram;
+    std::array<juce::Colour, 256> lut {};
 };
 
 class LoudnessPanel : public juce::Component
@@ -93,12 +114,22 @@ class MeterPanel : public juce::Component
 {
 public:
     void paint (juce::Graphics&) override;
+    void mouseDown (const juce::MouseEvent&) override { if (onClick) onClick(); }
     void tick (AnalyzerProcessor&);
+    void resetHolds() { for (auto* b : { &mL, &mR, &rL, &rR }) { b->hold = -100.0f; b->holdAge = 0; } }
 
-    struct Bar { float peak = -100, hold = -100, rms = -100; int holdAge = 0; void feed (float pk, float rmsV); };
+    struct Bar { float peak = -100, hold = -100, rms = -100; int holdAge = 0; void feed (float pk, float rmsV, int holdFrames); };
     Bar mL, mR, rL, rR;
     float mixM = -100, refM = -100, mixCorr = 0, refCorr = 0, mixMax = -100, refMax = -100;
     bool refRunning = false;
+
+    int style = 0, holdFrames = 90;
+    float floorDb = -60.0f;
+    std::function<void()> onClick;
+
+private:
+    void drawMeter (juce::Graphics&, juce::Rectangle<float> r, const Bar& b, juce::Colour c) const;
+    juce::Colour segColour (float db, juce::Colour c) const;
 };
 
 class HistoryView : public juce::Component
@@ -161,6 +192,28 @@ private:
     AnalyzerProcessor& proc;
 };
 
+class ViewPanel : public juce::Component
+{
+public:
+    ViewPanel();
+    void paint (juce::Graphics&) override;
+    void resized() override;
+    void mouseDown (const juce::MouseEvent& e) override { if (! box.contains (e.position)) setVisible (false); }
+    void setStyle (const ViewStyle&);
+    ViewStyle getStyle() const;
+    std::function<void (const ViewStyle&)> onChange;
+
+private:
+    void changed();
+    struct Row { const char* label; juce::Component* comp = nullptr; };
+    juce::ComboBox cbMode, cbRange, cbLine, cbFill, cbGrid, cbTheme, cbMeter, cbMeterRange, cbHold, cbLayout;
+    juce::TextButton btnGlow, btnPeaks, btnDefaults, btnClose;
+    std::vector<Row> left, right;
+    std::vector<std::pair<juce::String, juce::Rectangle<float>>> labels, headers;
+    juce::Rectangle<float> box;
+    bool loading = false;
+};
+
 class HelpOverlay : public juce::Component
 {
 public:
@@ -184,6 +237,9 @@ public:
     void showHelp (bool s) { help.setVisible (s); if (s) help.toFront (false); }
     void setScopeTab (bool scope);
     juce::String buildReport() const;
+    void applyStyle (const ViewStyle&, bool save);
+    void showView (bool s);
+    const ViewStyle& getStyle() const noexcept { return style; }
 
 private:
     void openFileChooser();
@@ -207,8 +263,10 @@ private:
     TonalView tonal;
     WaveView wave { proc };
     HelpOverlay help;
+    ViewPanel viewPanel;
+    ViewStyle style;
 
-    juce::TextButton btnSimple, btnPro, btnA, btnB, btnReset, btnHelp, btnAuto, btnReport;
+    juce::TextButton btnView, btnSimple, btnPro, btnA, btnB, btnReset, btnHelp, btnAuto, btnReport;
     juce::TextButton btnTabHist, btnTabScope;
     juce::ComboBox cbTarget, cbSlope, cbSpeed, cbSmooth, cbRes, cbChannel, cbMonitor, cbBand;
     juce::TextButton btnShowMix, btnShowRef, btnShowDiff, btnHold;
@@ -225,7 +283,7 @@ private:
 
     std::vector<float> pullL, pullR, mono;
     int tickCount = 0, lastRefVersion = -1, lastSlot = -1, lastReset = -1, lastRes = -1, lastChannel = -1;
-    bool pro = false, scopeTab = true;
+    bool pro = false, scopeTab = true, bigSpec = false;
     juce::Rectangle<int> rHeader, rSpec, rTonal, rHist, rLoud, rMeter, rRef;
 
     friend class AnalyzerEditor;

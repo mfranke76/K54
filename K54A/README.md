@@ -1,6 +1,6 @@
 # K-54 Analyzer · Keller54 · by Frank E.
 
-Analyzer-Plugin (AU, VST3, Standalone) für Einsteiger und Profis: Spektrum 20 Hz – 20 kHz, Tonale Balance, Pegel, LUFS nach EBU R128, Vektorskop und A/B-Vergleich mit bis zu 4 Referenz-Tracks plus Live-Referenz über den Sidechain-Eingang. Schalter EINFACH / PRO.
+Analyzer-Plugin (AU, VST3, Standalone) für Einsteiger und Profis: Spektrum 20 Hz – 20 kHz, Tonale Balance, Pegel, LUFS nach EBU R128, Vektorskop und A/B-Vergleich mit bis zu 4 Referenz-Tracks plus Live-Referenz über den Sidechain-Eingang. Schalter EINFACH / PRO, Knopf ANSICHT (Spektrum als Kurve / Terzbänder / Spektrogramm, 5 Farbschemata, LED-Pegel, Layout).
 
 ![K-54 Analyzer](Screenshots/K-54-Analyzer.png)
 
@@ -13,7 +13,7 @@ Analyzer-Plugin (AU, VST3, Standalone) für Einsteiger und Profis: Spektrum 20 H
 ## IDs
 - Bundle `de.keller54.k54analyzer`, AU `aufx K5A1 Kl54`
 - Parameter: `ab`, `match`, `refGain`, `sync`, `showMix`, `showRef`, `hold`, `slope`, `speed`, `smooth`, `target`, `autoReset`; ab 1.1 `showDiff`, `channel`, `fftRes`, `monitor`, `band`, `refSlot` (ab 1.2: Wert 4 = LIVE über Sidechain-Bus 2, standardmäßig aus)
-- EINFACH/PRO wird global gespeichert (`~/Library/Application Support/Keller54/K-54 Analyzer.settings`)
+- EINFACH/PRO und ANSICHT (`v_*`-Schlüssel, `Source/ViewStyle.h`) werden global gespeichert (`~/Library/Application Support/Keller54/K-54 Analyzer.settings`)
 
 ## Aufbau
 - `Source/Loudness.h` – K-Filter, Gating (absolut −70 LUFS, relativ −10 LU), LRA (EBU 3342), True Peak (4× Überabtastung)

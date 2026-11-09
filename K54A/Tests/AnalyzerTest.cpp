@@ -435,6 +435,70 @@ int main (int argc, char** argv)
         for (int t = 0; t < 10; ++t) { runAudio (*proc, 1.0 / 30.0, 0.5f, rnd, st); editor->runTick(); }
         check (c.isPro() && proc->getProMode(), "PRO-Modus gemerkt");
 
+        // ---- 1.3: Ansicht -------------------------------------------------
+        {
+            auto ticks = [&] (int n) { for (int t = 0; t < n; ++t) { runAudio (*proc, 1.0 / 30.0, 0.5f, rnd, st); editor->runTick(); } };
+            ViewStyle vs;
+            vs.specMode = 1;
+            c.applyStyle (vs, false);
+            ticks (40);
+            snap ("screen_balken.png");
+
+            vs = {};
+            vs.specMode = 2; vs.theme = 1; vs.meterStyle = 1; vs.range = 1;
+            c.applyStyle (vs, false);
+            setParam (*proc, "speed", 1.0f);
+            {
+                // Testsignal mit wechselnden Tönen, damit man im Spektrogramm etwas sieht
+                juce::AudioBuffer<float> tb (2, 1600);
+                juce::MidiBuffer mb;
+                double phs[3] {};
+                static const double notes[] { 110.0, 146.8, 196.0, 261.6, 329.6, 440.0, 587.3, 880.0 };
+                for (int t = 0; t < 240; ++t)
+                {
+                    const double f0 = notes[(t / 15) % 8];
+                    pinkish (rnd, tb.getWritePointer (0), 1600, 0.12f, st);
+                    for (int i = 0; i < 1600; ++i)
+                    {
+                        float v = tb.getSample (0, i);
+                        for (int h = 0; h < 3; ++h)
+                        {
+                            phs[h] += 2.0 * juce::MathConstants<double>::pi * f0 * (h + 1) / 48000.0;
+                            v += (0.25f / (float) (h + 1)) * (float) std::sin (phs[h]);
+                        }
+                        tb.setSample (0, i, v);
+                        tb.setSample (1, i, v);
+                    }
+                    proc->processBlock (tb, mb);
+                    editor->runTick();
+                }
+            }
+            snap ("screen_spektrogramm.png");
+            setParam (*proc, "speed", 3.0f);
+
+            vs = {};
+            vs.layout = 1; vs.theme = 2; vs.meterStyle = 2; vs.line = 2; vs.meterRange = 2;
+            c.applyStyle (vs, false);
+            ticks (40);
+            snap ("screen_gross.png");
+
+            vs = {};
+            vs.theme = 4;
+            c.applyStyle (vs, false);
+            c.showView (true);
+            ticks (5);
+            snap ("screen_ansicht.png");
+            c.showView (false);
+
+            ViewStyle a, b2;
+            a.theme = 3; a.specMode = 2; a.hold = 2; a.glow = false;
+            a.save (proc->getSettings());
+            b2.load (proc->getSettings());
+            check (a == b2, "Ansicht speichern und laden");
+            c.applyStyle (ViewStyle {}, true);
+            check (c.getStyle() == ViewStyle {}, "Ansicht auf Standard");
+        }
+
         const auto report = c.buildReport();
         check (report.contains ("Integrated") && report.contains ("TONALE BALANCE"), "Messbericht enthält Lautheit und Tonale Balance");
         outDir.getChildFile ("Bericht.txt").replaceWithText (report);

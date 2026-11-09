@@ -201,6 +201,7 @@ public:
     float getUiScale() const noexcept { return uiScale.load(); }
     void setUiScale (float s) { uiScale.store (s); }
     bool getProMode() const;
+    juce::PropertiesFile& getSettings() { return *settings; }
     void setProMode (bool pro);
 
     // Lade-Arbeit (läuft im Lade-Thread, auch für Tests direkt aufrufbar)

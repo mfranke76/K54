@@ -1,5 +1,15 @@
 K-54 Analyzer · Keller54 · by Frank E. – BETA
 
+Neu in 1.3.0 – neue Grafik, alles einstellbar (Knopf ANSICHT):
+- Spektrum als Kurve mit Leuchten, als Terzband-Balken (LED) oder als Spektrogramm mit Kurve darüber
+- Markierung der 3 stärksten Spitzen mit Frequenz
+- dB-Bereich, Linienstärke, Füllung und Raster wählbar, Namen der Frequenzbereiche im Spektrum
+- 5 Farbschemata: Keller54, Neon, Studio, Kontrast, Ozean – gelten für alle Anzeigen
+- Pegel als LED-Kette (Ampel oder Themenfarbe) oder glatte Balken, Bereich 60 / 48 / 24 dB, Peak-Hold 1 s / 3 s / bis Klick
+- Klick auf die Pegel setzt die Spitzen zurück
+- Layout „Großes Spektrum“
+- Die Einstellungen gelten für alle Projekte
+
 Neu in 1.2.0 – Live-Referenz:
 - Slot LIVE: misst alles, was am Sidechain-Eingang ankommt, als Referenz – eine andere Spur, ein externer Player oder eine App über ein virtuelles Audiogerät
 - A/B, Lautheitsangleich, Tonale Balance, Differenzkurve, Vektorskop und Lautheitswerte funktionieren wie bei einer Datei
