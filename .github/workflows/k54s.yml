@@ -12,6 +12,11 @@ on:
       - "K54S/**"
       - ".github/workflows/k54s.yml"
   workflow_dispatch:
+    inputs:
+      release:
+        description: "Als Beta-Release veroeffentlichen (aus = nur Artifacts zum Testen)"
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -45,6 +50,7 @@ jobs:
           name: K-54-S-Windows
           path: K54S/dist/*.exe
       - name: Release
+        if: github.event_name == 'push' || inputs.release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: k54s-v${{ steps.ver.outputs.version }}
@@ -75,6 +81,7 @@ jobs:
         id: ver
         run: echo "version=$(sed -nE 's/^project\(K55 VERSION ([0-9.]+).*/\1/p' CMakeLists.txt)" >> "$GITHUB_OUTPUT"
       - name: Release
+        if: github.event_name == 'push' || inputs.release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: k54s-v${{ steps.ver.outputs.version }}
