@@ -17,6 +17,10 @@ on:
         description: "Als Beta-Release veroeffentlichen (aus = nur Artifacts zum Testen)"
         type: boolean
         default: true
+      draft:
+        description: "Nur als privaten Entwurf hochladen (Test auf dem eigenen Rechner, nicht oeffentlich)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -50,11 +54,12 @@ jobs:
           name: K-54-S-Windows
           path: K54S/dist/*.exe
       - name: Release
-        if: github.event_name == 'push' || inputs.release
+        if: github.event_name == 'push' || inputs.release || inputs.draft
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: k54s-v${{ steps.ver.outputs.version }}
-          name: K-54 S ${{ steps.ver.outputs.version }}
+          tag_name: k54s-v${{ steps.ver.outputs.version }}${{ inputs.draft && '-test' || '' }}
+          name: K-54 S ${{ steps.ver.outputs.version }}${{ inputs.draft && ' (Test)' || '' }}
+          draft: ${{ inputs.draft == true }}
           target_commitish: ${{ github.sha }}
           body_path: K54S/RELEASE_NOTES.md
           prerelease: true
@@ -81,11 +86,12 @@ jobs:
         id: ver
         run: echo "version=$(sed -nE 's/^project\(K55 VERSION ([0-9.]+).*/\1/p' CMakeLists.txt)" >> "$GITHUB_OUTPUT"
       - name: Release
-        if: github.event_name == 'push' || inputs.release
+        if: github.event_name == 'push' || inputs.release || inputs.draft
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: k54s-v${{ steps.ver.outputs.version }}
-          name: K-54 S ${{ steps.ver.outputs.version }}
+          tag_name: k54s-v${{ steps.ver.outputs.version }}${{ inputs.draft && '-test' || '' }}
+          name: K-54 S ${{ steps.ver.outputs.version }}${{ inputs.draft && ' (Test)' || '' }}
+          draft: ${{ inputs.draft == true }}
           target_commitish: ${{ github.sha }}
           body_path: K54S/RELEASE_NOTES.md
           prerelease: true
