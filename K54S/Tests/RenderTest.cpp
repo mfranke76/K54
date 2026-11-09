@@ -139,7 +139,8 @@ int main (int argc, char** argv)
 
     // ---------------------------------------------------------------- 1) alle Werks-Presets
     const auto& presets = getFactoryPresets();
-    for (int pi = 0; pi < proc.getNumPrograms(); ++pi)
+    const bool keysOnly = argc > 2 && juce::String (argv[2]) == "keys";   // schneller Lauf: nur KEYS-Tests
+    for (int pi = 0; pi < (keysOnly ? 0 : proc.getNumPrograms()); ++pi)
     {
         if (juce::String (presets[(size_t) pi].category) == "Sample") continue;   // brauchen ein Sample (Test 2)
         proc.setCurrentProgram (pi);
@@ -470,6 +471,7 @@ int main (int argc, char** argv)
     // ---------------------------------------------------------------- 5c) KEYS-Ebene: alle Modelle + Varianten, Tonhoehe, Leslie, Talkbox, CPU
     {
         std::printf ("--- KEYS-Ebene\n");
+        setP (proc, ParamID::harmOn, 0.0f);    // Harmonizer aus dem vorigen Test ist global -> aus
         auto keysSetup = [&] (int model, int variant)
         {
             proc.setCurrentProgram (0);
@@ -526,7 +528,7 @@ int main (int argc, char** argv)
                 for (auto& e : ev) if (e.at >= pos && e.at < pos + block) midi.addEvent (juce::MidiMessage::noteOn (1, e.note, e.vel), e.at - pos);
                 if (pos <= at (3.0) && at (3.0) < pos + block) midi.addEvent (juce::MidiMessage::controllerEvent (1, 1, 127), 0);
                 proc.processBlock (buf, midi);
-                for (int ch = 0; ch < 2; ++ch) out.copyFrom (ch, pos, buf, ch, 0, block);
+                for (int ch = 0; ch < 2; ++ch) out.copyFrom (ch, pos, buf, ch, 0, std::min (block, total - pos));
             }
             auto spread = [&] (int a, int len)
             {
@@ -553,12 +555,20 @@ int main (int argc, char** argv)
                 const int cc = juce::jlimit (0, 127, (int) (127.0 * pos / total * 1.3));
                 midi.addEvent (juce::MidiMessage::controllerEvent (1, 1, cc), 0);
                 proc.processBlock (buf, midi);
-                for (int ch = 0; ch < 2; ++ch) out.copyFrom (ch, pos, buf, ch, 0, block);
+                for (int ch = 0; ch < 2; ++ch) out.copyFrom (ch, pos, buf, ch, 0, std::min (block, total - pos));
             }
-            auto zcr = [&] (int a, int len) { int z = 0; for (int s = a + 1; s < a + len; ++s) if ((out.getSample (0, s - 1) < 0) != (out.getSample (0, s) < 0)) ++z; return z; };
-            const int u = zcr (at (0.3), at (0.3)), i = zcr (at (2.5), at (0.3));
-            std::printf ("%s Talkbox U -> I: Nulldurchgaenge %d -> %d\n", i > u ? "OK  " : "FAIL", u, i);
-            allOk &= check ("Talkbox Fahrt", out) && i > u;
+            // Helligkeit = Energie der 1. Ableitung / Energie (I hat hohe Formanten, U nur tiefe)
+            // Verhaeltnis Band 2,6 kHz (I/E) zu Band 900 Hz (U/O)
+            auto bright = [&] (int a, int len)
+            {
+                SVF hi, mid; hi.set (2600.0f, 2.0f, sr); mid.set (900.0f, 2.0f, sr);
+                double eh = 0, em = 0;
+                for (int s = a; s < a + len; ++s) { const float x = out.getSample (0, s); const float h = hi.bandpass (x), m = mid.bandpass (x); if (s > a + 512) { eh += h * h; em += m * m; } }
+                return eh / (em + 1e-12);
+            };
+            const double u = bright (at (0.3), at (0.3)), i = bright (at (2.5), at (0.3));
+            std::printf ("%s Talkbox U -> I: hoch/mitte %.3f -> %.3f\n", i > u * 1.5 ? "OK  " : "FAIL", u, i);
+            allOk &= check ("Talkbox Fahrt", out) && i > u * 1.5;
             writeWav (outDir.getChildFile ("keys_talkbox_sweep.wav"), out, sr);
         }
         // CPU: Kathedrale Tutti, 10 Toene + Leslie-Orgel + Clav, je 10 s

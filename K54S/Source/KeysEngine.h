@@ -804,7 +804,7 @@ public:
     {
         if (mix <= 0.0001f) { envF = 0.0f; return; }
         static const float F[5][3] { { 300, 870, 2240 }, { 570, 840, 2410 }, { 730, 1090, 2440 }, { 530, 1840, 2480 }, { 270, 2290, 3010 } };
-        static const float G[3] { 1.0f, 0.7f, 0.35f };
+        static const float G[3] { 1.0f, 2.2f, 1.7f };
         const float fShift = std::exp2 (shift * 0.5f);
         for (int s0 = 0; s0 < n; s0 += 16)
         {
@@ -825,7 +825,7 @@ public:
             for (int k = 0; k < 3; ++k)
             {
                 const float f = (F[i][k] + (F[i + 1][k] - F[i][k]) * fr) * fShift;
-                const float q = f / (k == 0 ? 80.0f : (k == 1 ? 100.0f : 130.0f));
+                const float q = f / (k == 0 ? 90.0f : (k == 1 ? 160.0f : 220.0f));
                 fL[k].set (f, q, sr);
                 fR[k].set (f, q, sr);
             }
@@ -833,17 +833,20 @@ public:
             {
                 const float xl = L[s], xr = R[s];
                 envF += (std::abs (0.5f * (xl + xr)) - envF) * 0.002f;
+                // Vorbetonung wie im Mund: hohe Obertoene anheben, damit E und I hoerbar werden
+                const float el = xl - 0.82f * prevL, er = xr - 0.82f * prevR;
+                prevL = xl; prevR = xr;
                 float yl = 0.0f, yr = 0.0f;
-                for (int k = 0; k < 3; ++k) { yl += fL[k].bandpass (xl) * G[k]; yr += fR[k].bandpass (xr) * G[k]; }
-                L[s] = xl * (1.0f - mix) + yl * 1.6f * mix;
-                R[s] = xr * (1.0f - mix) + yr * 1.6f * mix;
+                for (int k = 0; k < 3; ++k) { yl += fL[k].bandpass (el) * G[k]; yr += fR[k].bandpass (er) * G[k]; }
+                L[s] = xl * (1.0f - mix) + yl * 3.2f * mix;
+                R[s] = xr * (1.0f - mix) + yr * 3.2f * mix;
             }
         }
     }
 
 private:
     double sr = 44100.0, lfo = 0.0;
-    float vowel = 0.5f, envF = 0.0f;
+    float vowel = 0.5f, envF = 0.0f, prevL = 0.0f, prevR = 0.0f;
     SVF fL[3], fR[3];
 };
 
