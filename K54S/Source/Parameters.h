@@ -118,6 +118,29 @@ namespace ParamID
     inline constexpr const char* harmOctDn  = "harmOctDn";
     inline constexpr const char* harmLevel  = "harmLevel";
 
+    // KEYS-Ebene (1.2.0): Clavinet, Tine-Piano, Tonewheel-Orgel, Pfeifenorgel, FM, Mundharmonika
+    inline constexpr const char* synthOn    = "synthOn";
+    inline constexpr const char* keysOn     = "keysOn";
+    inline constexpr const char* keysModel  = "keysModel";
+    inline constexpr const char* keysVariant= "keysVariant";
+    inline constexpr const char* keysLevel  = "keysLevel";
+    inline constexpr const char* keysOct    = "keysOct";
+    inline constexpr const char* keysTone   = "keysTone";
+    inline constexpr const char* keysDecay  = "keysDecay";
+    inline constexpr const char* keysA      = "keysA";
+    inline constexpr const char* keysB      = "keysB";
+    inline constexpr const char* keysVel    = "keysVel";
+    inline constexpr const char* keysDrive  = "keysDrive";
+    inline constexpr const char* keysFx     = "keysFx";
+    inline constexpr const char* keysFxAmt  = "keysFxAmt";
+    inline constexpr const char* keysFxRate = "keysFxRate";
+    inline constexpr const char* keysWheel  = "keysWheel";
+    // Talkbox (wirkt auf die Synth-Ebene)
+    inline constexpr const char* talkMix    = "talkMix";
+    inline constexpr const char* talkSrc    = "talkSrc";
+    inline constexpr const char* talkShift  = "talkShift";
+    inline constexpr const char* talkRate   = "talkRate";
+
     inline juce::String modSrc (int slot) { return "mod" + juce::String (slot + 1) + "Src"; }
     inline juce::String modDst (int slot) { return "mod" + juce::String (slot + 1) + "Dst"; }
     inline juce::String modAmt (int slot) { return "mod" + juce::String (slot + 1) + "Amt"; }
@@ -160,6 +183,70 @@ namespace ParamChoices
     inline const juce::StringArray modDests    { "Off", "Pitch", "Osc1 Pitch", "Osc2 Pitch", "Osc3 Pitch", "Cutoff", "Emphasis", "Drive", "Pulse Width",
                                                  "Volume", "Pan", "Detune", "Noise", "Sub", "Osc1 Level", "Osc2 Level", "Osc3 Level",
                                                  "WT Pos 1", "WT Pos 2", "WT Pos 3", "WT Pos All" };
+
+    // ---------------- KEYS-Ebene
+    inline const juce::StringArray keysModels { "Funk Clav", "Tine Piano", "Tonewheel Organ", "Pipe Organ",
+                                                "FM Piano", "FM Bell", "FM Bass", "Blues Harp" };
+    enum { kClav = 0, kTine, kTonewheel, kPipe, kFmPiano, kFmBell, kFmBass, kHarp, numKeysModels };
+    inline const juce::StringArray keysFxTypes { "Off", "Phaser", "Tremolo", "Auto-Pan", "Chorus", "Wah (Env)", "Wah (Mod-Rad)", "Leslie" };
+    enum { fxOff = 0, fxPhaser, fxTremolo, fxAutoPan, fxChorus, fxWahEnv, fxWahWheel, fxLeslie };
+    inline const juce::StringArray keysWheels  { "Off", "Leslie Speed", "Swell", "Vibrato", "Register", "Tone" };
+    enum { kwOff = 0, kwLeslie, kwSwell, kwVibrato, kwRegister, kwTone };
+    inline const juce::StringArray keysOctaves { "-2", "-1", "0", "+1", "+2" };
+    inline const juce::StringArray talkSources { "Mod-Rad", "Huellkurve", "Aftertouch", "Auto (LFO)" };
+    inline constexpr int maxKeysVariants = 15;
+
+    /** Orgelwelten der Pfeifenorgel – synthetisch nachempfunden, keine Aufnahmen */
+    inline const juce::StringArray& organWorlds()
+    {
+        static const juce::StringArray w {
+            u8 ("Paris Notre-Dame"), u8 ("Freiberg Silbermann"), u8 ("Leipzig Bach-Barock"), u8 ("Passau Dom"),
+            u8 ("K\xc3\xb6ln Dom"), u8 ("Ulm M\xc3\xbcnster"), u8 ("Rom St. Peter"), u8 ("London Westminster"),
+            u8 ("Haarlem St. Bavo"), u8 ("Wien Stephansdom"), u8 ("Hamburg Michel"), u8 ("Riga Dom"),
+            u8 ("Philadelphia Wanamaker"), u8 ("Theater-Orgel"), u8 ("Dorfkirche") };
+        return w;
+    }
+
+    /** Namen der Varianten je Modell (Regler VARIANTE auf der KEYS-Seite) */
+    inline const juce::StringArray& keysVariantNames (int model)
+    {
+        static const juce::StringArray clav  { "Brilliant", "Treble", "Medium", "Soft", "Brilliant + Medium" };
+        static const juce::StringArray tine  { "Stage", "Suitcase", "Bright Tines", "Mellow", "Reed-Piano" };
+        static const juce::StringArray tw    { "888000000  Jazz", "888800000  Gospel", "888888888  Volle Orgel",
+                                               "800000888  Pfeife hoch", "688600000  Ballade", "008000000  Weich",
+                                               "838000000  Groove", "888630000  Rock", "808800008  Blues", "006876540  Theater" };
+        static const juce::StringArray fmp   { "80er Ballade", "Bright Tine", "Soft Keys", "Hard Funk" };
+        static const juce::StringArray fmb   { u8 ("R\xc3\xb6hrenglocken"), "Glas", "Celesta", "Marimba", "Vibraphon" };
+        static const juce::StringArray fmbs  { "Solid", "Punch", "Pluck", "Synth Growl" };
+        static const juce::StringArray harp  { "Clean", "Bullet Mic", "Chromatisch", "Hohle Hand" };
+        switch (model)
+        {
+            case kClav:      return clav;
+            case kTine:      return tine;
+            case kTonewheel: return tw;
+            case kPipe:      return organWorlds();
+            case kFmPiano:   return fmp;
+            case kFmBell:    return fmb;
+            case kFmBass:    return fmbs;
+            default:         return harp;
+        }
+    }
+
+    /** Beschriftung der beiden Modell-Regler A und B */
+    inline juce::String keysCtrlName (int model, bool b)
+    {
+        switch (model)
+        {
+            case kClav:      return b ? "Pickup"     : "Damper";
+            case kTine:      return b ? "Bell"       : "Bark";
+            case kTonewheel: return b ? "Click"      : "Percussion";
+            case kPipe:      return b ? "Wind"       : "Register";
+            case kFmPiano:
+            case kFmBell:
+            case kFmBass:    return b ? "Attack"     : "Index";
+            default:         return b ? "Bend"       : "Growl";
+        }
+    }
 }
 
 inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
@@ -315,6 +402,32 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     p.push_back (std::make_unique<B> (ParameterID { ParamID::harmOctUp, v },  "Harmony Oct Up", false));
     p.push_back (std::make_unique<B> (ParameterID { ParamID::harmOctDn, v },  "Harmony Oct Down", false));
     p.push_back (std::make_unique<P> (ParameterID { ParamID::harmLevel, v },  "Harmony Level", unit(), 0.8f, pct));
+
+    // KEYS-Ebene + Talkbox (1.2.0) – hinten angehaengt, damit alte Projekte und die A61-Seiten gleich bleiben
+    p.push_back (std::make_unique<B> (ParameterID { ParamID::synthOn, v },    "Synth Layer On", true));
+    p.push_back (std::make_unique<B> (ParameterID { ParamID::keysOn, v },     "Keys On", false));
+    p.push_back (std::make_unique<C> (ParameterID { ParamID::keysModel, v },  "Keys Model", ParamChoices::keysModels, 0));
+    p.push_back (std::make_unique<AudioParameterInt> (ParameterID { ParamID::keysVariant, v }, "Keys Variant", 0, ParamChoices::maxKeysVariants - 1, 0,
+                 AudioParameterIntAttributes().withStringFromValueFunction ([] (int x, int) { return String (x + 1); })));
+    p.push_back (std::make_unique<P> (ParameterID { ParamID::keysLevel, v },  "Keys Volume", NormalisableRange<float> (-36.0f, 6.0f), -6.0f, dbA));
+    p.push_back (std::make_unique<C> (ParameterID { ParamID::keysOct, v },    "Keys Octave", ParamChoices::keysOctaves, 2));
+    p.push_back (std::make_unique<P> (ParameterID { ParamID::keysTone, v },   "Keys Tone",  unit(), 0.5f, pct));
+    p.push_back (std::make_unique<P> (ParameterID { ParamID::keysDecay, v },  "Keys Decay", unit(), 0.5f, pct));
+    p.push_back (std::make_unique<P> (ParameterID { ParamID::keysA, v },      "Keys Ctrl A", unit(), 0.4f, pct));
+    p.push_back (std::make_unique<P> (ParameterID { ParamID::keysB, v },      "Keys Ctrl B", unit(), 0.3f, pct));
+    p.push_back (std::make_unique<P> (ParameterID { ParamID::keysVel, v },    "Keys Velocity", unit(), 0.6f, pct));
+    p.push_back (std::make_unique<P> (ParameterID { ParamID::keysDrive, v },  "Keys Drive", unit(), 0.0f, pct));
+    p.push_back (std::make_unique<C> (ParameterID { ParamID::keysFx, v },     "Keys FX", ParamChoices::keysFxTypes, 0));
+    p.push_back (std::make_unique<P> (ParameterID { ParamID::keysFxAmt, v },  "Keys FX Amount", unit(), 0.5f, pct));
+    p.push_back (std::make_unique<P> (ParameterID { ParamID::keysFxRate, v }, "Keys FX Rate", unit(), 0.4f, pct));
+    p.push_back (std::make_unique<C> (ParameterID { ParamID::keysWheel, v },  "Keys Mod Wheel", ParamChoices::keysWheels, 0));
+    p.push_back (std::make_unique<P> (ParameterID { ParamID::talkMix, v },    "Talkbox Mix", unit(), 0.0f, pct));
+    p.push_back (std::make_unique<C> (ParameterID { ParamID::talkSrc, v },    "Talkbox Source", ParamChoices::talkSources, 0));
+    p.push_back (std::make_unique<P> (ParameterID { ParamID::talkShift, v },  "Talkbox Formant", NormalisableRange<float> (-1.0f, 1.0f), 0.0f, bip));
+    {
+        NormalisableRange<float> r (0.05f, 8.0f); r.setSkewForCentre (1.0f);
+        p.push_back (std::make_unique<P> (ParameterID { ParamID::talkRate, v }, "Talkbox Rate", r, 1.0f, hzS));
+    }
 
     return { p.begin(), p.end() };
 }

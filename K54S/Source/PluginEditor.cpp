@@ -25,14 +25,14 @@ K55Main::K55Main (K55Processor& p)
       keyboard (p.keyboardState, juce::MidiKeyboardComponent::horizontalKeyboard),
       pitchWheel (true,  [&p] (float v) { p.setScreenBend (v); }),
       modWheel   (false, [&p] (float v) { p.setScreenWheel (v); }),
-      modPanel (p), harmPanel (p), samplePanel (p), fxPanel (p)
+      modPanel (p), harmPanel (p), samplePanel (p), fxPanel (p), keysPanel (p)
 {
     setLookAndFeel (&lnf);
     setOpaque (true);
 
     // Reiter
     int idx = 0;
-    for (auto* t : { &synthTab, &modTab, &sampleTab, &fxTab, &harmTab })
+    for (auto* t : { &synthTab, &modTab, &sampleTab, &fxTab, &harmTab, &keysTab })
     {
         t->setClickingTogglesState (true);
         t->setRadioGroupId (55);
@@ -54,6 +54,8 @@ K55Main::K55Main (K55Processor& p)
     portrait = juce::ImageCache::getFromMemory (BinaryData::frank_portrait_png, BinaryData::frank_portrait_pngSize);
     addChildComponent (samplePanel);
     addChildComponent (fxPanel);
+    addChildComponent (keysPanel);
+    keysTab.setTooltip ("KEYS-Ebene: Funk Clav, Tine Piano, Tonewheel + Leslie, Kirchenorgeln der Welt, FM, Blues Harp - und Talkbox");
     addAndMakeVisible (pitchWheel);
     addAndMakeVisible (modWheel);
     pitchWheel.setTooltip ("Pitch-Wheel (folgt deinem Keyboard, mit der Maus ziehbar)");
@@ -228,7 +230,7 @@ void K55Main::resized()
 
     {
         int x = 14;
-        for (auto* t : { &synthTab, &modTab, &sampleTab, &fxTab, &harmTab })
+        for (auto* t : { &synthTab, &modTab, &sampleTab, &fxTab, &harmTab, &keysTab })
         {
             t->setBounds (x, headerH + 10, 92, 24);
             x += 97;
@@ -243,6 +245,7 @@ void K55Main::resized()
     harmPanel.setBounds (14, top, W - 28, bodyH);
     samplePanel.setBounds (14, top, W - 28, bodyH);
     fxPanel.setBounds (14, top, W - 28, bodyH);
+    keysPanel.setBounds (14, top, W - 28, bodyH);
     secOsc    = { 14,  top, 480, bodyH };
     secFilter = { 506, top, 206, bodyH };
     secEnv    = { 724, top, 258, bodyH };
@@ -569,6 +572,8 @@ void K55Main::setPage (int page)
     sampleTab.setToggleState (page == 2, juce::dontSendNotification);
     fxTab.setToggleState (page == 3, juce::dontSendNotification);
     harmTab.setToggleState (page == 4, juce::dontSendNotification);
+    keysTab.setToggleState (page == 5, juce::dontSendNotification);
+    keysPanel.setVisible (page == 5);
     harmPanel.setVisible (page == 4);
     for (auto& [id, k] : knobs)   { k->slider.setVisible (page == 0); k->label.setVisible (page == 0); }
     for (auto& [id, c] : choices) { c->box.setVisible (page == 0);    c->label.setVisible (page == 0); }

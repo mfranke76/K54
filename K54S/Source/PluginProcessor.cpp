@@ -34,6 +34,10 @@ void K55Processor::prepareToPlay (double sampleRate, int samplesPerBlock)
     readParams();
     engine.setParams (sp);
     engine.prepare (sampleRate, samplesPerBlock);
+    readKeysParams();
+    keys.setParams (kp);
+    keys.prepare (sampleRate, juce::jmax (samplesPerBlock, 4096));
+    talk.prepare (sampleRate);
     harmonizer.reset();
     reverb.setSampleRate (sampleRate);
     reverb.reset();
@@ -136,6 +140,30 @@ void K55Processor::readParams()
     sp.smpKeyTrack  = f (ParamID::smpKeyTrack) > 0.5f;
     sp.smpOneShot   = f (ParamID::smpOneShot) > 0.5f;
     sp.smpGain      = juce::Decibels::decibelsToGain (f (ParamID::smpGain), -60.0f);
+    sp.layerOn      = f (ParamID::synthOn) > 0.5f;
+}
+
+void K55Processor::readKeysParams()
+{
+    auto f = [this] (const char* id) { return raw (id)->load(); };
+    auto i = [this] (const char* id) { return juce::roundToInt (raw (id)->load()); };
+    kp.on      = f (ParamID::keysOn) > 0.5f;
+    kp.model   = juce::jlimit (0, ParamChoices::numKeysModels - 1, i (ParamID::keysModel));
+    kp.variant = juce::jlimit (0, ParamChoices::keysVariantNames (kp.model).size() - 1, i (ParamID::keysVariant));
+    kp.level   = juce::Decibels::decibelsToGain (f (ParamID::keysLevel), -60.0f);
+    kp.octave  = i (ParamID::keysOct) - 2;
+    kp.tone    = f (ParamID::keysTone);
+    kp.decay   = f (ParamID::keysDecay);
+    kp.a       = f (ParamID::keysA);
+    kp.b       = f (ParamID::keysB);
+    kp.vel     = f (ParamID::keysVel);
+    kp.drive   = f (ParamID::keysDrive);
+    kp.fx      = i (ParamID::keysFx);
+    kp.fxAmt   = f (ParamID::keysFxAmt);
+    kp.fxRate  = f (ParamID::keysFxRate);
+    kp.wheel   = i (ParamID::keysWheel);
+    kp.bendUp  = f (ParamID::bendRange);
+    kp.bendDown= f (ParamID::bendDown);
 }
 
 // ---------------------------------------------------------------- Audio
@@ -245,7 +273,17 @@ void K55Processor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuf
     // ---- 4) Synth
     juce::AudioBuffer<float> synthView (synthBuf.getArrayOfWritePointers(), 2, n);
     engine.render (synthView, midi);
-    voicesActive = engine.activeVoices();
+
+    // ---- 4a) Talkbox auf der Synth-Ebene
+    talk.process (synthView.getWritePointer (0), synthView.getWritePointer (1), n, raw (ParamID::talkMix)->load(),
+                  juce::roundToInt (raw (ParamID::talkSrc)->load()), raw (ParamID::talkShift)->load(), raw (ParamID::talkRate)->load(),
+                  engine.getModWheel(), keys.getAftertouch());
+
+    // ---- 4b) KEYS-Ebene (Clav, Tine, Orgeln, FM, Harp) dazu
+    readKeysParams();
+    keys.setParams (kp);
+    keys.render (synthView.getWritePointer (0), synthView.getWritePointer (1), n, midi);
+    voicesActive = engine.activeVoices() + keys.activeVoices();
     bendOut = engine.getBend();
     modOut = engine.getModWheel();
 

@@ -51,6 +51,7 @@ struct SynthParams
     float smpStart = 0, smpEnd = 1, smpLoopStart = 0;
     bool  smpKeyTrack = true, smpOneShot = false;
     float smpGain = 1.0f;                       // Sample-Lautstaerke (linear)
+    bool  layerOn = true;                       // Synth-Ebene an (KEYS-Seite)
 };
 
 namespace LayerMathLite
@@ -783,6 +784,7 @@ private:
 
     void noteOn (int note, float vel)
     {
+        if (! params.layerOn) { lastNote = note; return; }   // Synth-Ebene aus: nur die KEYS spielen
         ++stamp;
         if (params.voiceMode == 2)
         {

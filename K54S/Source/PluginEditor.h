@@ -5,6 +5,7 @@
 #include "ModPanel.h"
 #include "SamplePanel.h"
 #include "HarmonyPanel.h"
+#include "KeysPanel.h"
 
 // ---------------------------------------------------------------------------
 //  Main-Ausgangspegel neben dem Logo (Stereo, Peak-Hold, Clip-Anzeige)
@@ -148,7 +149,7 @@ public:
 
     void paint (juce::Graphics&) override;
     void resized() override;
-    void setPage (int page);   // 0 SYNTH, 1 MOD, 2 SAMPLE, 3 FX, 4 HARMONY
+    void setPage (int page);   // 0 SYNTH, 1 MOD, 2 SAMPLE, 3 FX, 4 HARMONY, 5 KEYS
     std::function<void (float)> onScaleChosen;
 
     bool isInterestedInFileDrag (const juce::StringArray& files) override;
@@ -203,7 +204,7 @@ private:
     juce::MidiKeyboardComponent keyboard;
     WheelView pitchWheel, modWheel;
 
-    juce::TextButton synthTab { "SYNTH" }, modTab { "MOD" }, sampleTab { "SAMPLE" }, fxTab { "FX" }, harmTab { "HARMONY" };
+    juce::TextButton synthTab { "SYNTH" }, modTab { "MOD" }, sampleTab { "SAMPLE" }, fxTab { "FX" }, harmTab { "HARMONY" }, keysTab { "KEYS" };
     juce::TextButton harmButton { ParamChoices::u8 ("\xe2\x99\xab HARMONIE") };
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> harmAtt;
     juce::Image portrait;
@@ -211,6 +212,7 @@ private:
     HarmonyPanel harmPanel;
     SamplePanel samplePanel;
     FxPanel fxPanel;
+    KeysPanel keysPanel;
     int currentPage = 0, voices = 0;
     bool pianoLoading = false;
     int lastWave[3] { -1, -1, -1 };

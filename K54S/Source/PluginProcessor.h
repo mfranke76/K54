@@ -2,6 +2,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "Parameters.h"
 #include "SynthEngine.h"
+#include "KeysEngine.h"
 #include "Presets.h"
 #include "Harmonizer.h"
 
@@ -112,6 +113,10 @@ private:
 
     SynthEngine engine;
     SynthParams sp;
+    KeysEngine keys;
+    KeysParams kp;
+    TalkBox talk;
+    void readKeysParams();
     juce::Reverb reverb;
     juce::Reverb::Parameters revParams;
     juce::AudioBuffer<float> synthBuf, revBuf, inputBuf, recBuf;

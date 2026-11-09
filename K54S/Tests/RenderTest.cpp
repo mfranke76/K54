@@ -92,6 +92,30 @@ static void shot (K55Processor& proc, int page, const juce::File& f, std::functi
     png.writeImageToStream (im, fo);
 }
 
+/** Grundton per normierter Autokorrelation (50..2000 Hz) */
+static double estimateHz (const juce::AudioBuffer<float>& b, int from, int len, double sr)
+{
+    const float* x = b.getReadPointer (0);
+    double best = 0.0; int bestLag = 0;
+    const int minLag = (int) (sr / 2000.0), maxLag = (int) (sr / 50.0);
+    std::vector<double> r ((size_t) maxLag + 2, 0.0);
+    for (int lag = minLag; lag <= maxLag; ++lag)
+    {
+        double s = 0.0, e1 = 0.0, e2 = 0.0;
+        for (int i = 0; i < len; ++i) { const double a = x[from + i], c = x[from + i + lag]; s += a * c; e1 += a * a; e2 += c * c; }
+        r[(size_t) lag] = s / (std::sqrt (e1 * e2) + 1e-12);
+    }
+    // erstes deutliches Maximum (vermeidet Oktavfehler)
+    double top = 0.0; for (int lag = minLag; lag <= maxLag; ++lag) top = std::max (top, r[(size_t) lag]);
+    for (int lag = minLag + 1; lag < maxLag; ++lag)
+        if (r[(size_t) lag] > 0.85 * top && r[(size_t) lag] >= r[(size_t) lag - 1] && r[(size_t) lag] >= r[(size_t) lag + 1]) { bestLag = lag; best = r[(size_t) lag]; break; }
+    if (bestLag == 0) return 0.0;
+    // parabolische Verfeinerung
+    const double a = r[(size_t) bestLag - 1], c = r[(size_t) bestLag + 1];
+    const double d = 0.5 * (a - c) / (a - 2 * best + c);
+    return sr / (bestLag + d);
+}
+
 int main (int argc, char** argv)
 {
     juce::ScopedJuceInitialiser_GUI gui;
@@ -443,6 +467,114 @@ int main (int argc, char** argv)
         allOk &= check ("Konzertfluegel + Harmonie", render (proc, sr, block, 2.0, { { 0, 60, true, 0.9f }, { at (0.5), 64, true, 0.8f }, { at (1.2), 60, false, 0 }, { at (1.2), 64, false, 0 } }));
     }
 
+    // ---------------------------------------------------------------- 5c) KEYS-Ebene: alle Modelle + Varianten, Tonhoehe, Leslie, Talkbox, CPU
+    {
+        std::printf ("--- KEYS-Ebene\n");
+        auto keysSetup = [&] (int model, int variant)
+        {
+            proc.setCurrentProgram (0);
+            setP (proc, ParamID::synthOn, 0.0f);
+            setP (proc, ParamID::keysOn, 1.0f);
+            setP (proc, ParamID::keysModel, (float) model);
+            setP (proc, ParamID::keysVariant, (float) variant);
+            setP (proc, ParamID::keysA, 0.6f);
+            proc.prepareToPlay (sr, block);
+        };
+        for (int m = 0; m < ParamChoices::numKeysModels; ++m)
+        {
+            const auto& names = ParamChoices::keysVariantNames (m);
+            for (int v = 0; v < names.size(); ++v)
+            {
+                keysSetup (m, v);
+                std::vector<Ev> ev;
+                for (int n : { 36, 48, 55, 60, 64, 72, 84 }) { ev.push_back ({ at (0.05), n, true, 0.9f }); ev.push_back ({ at (1.2), n, false, 0.0f }); }
+                auto out = render (proc, sr, block, 2.2, ev);
+                const juce::String nm = ParamChoices::keysModels[m] + " / " + names[v];
+                allOk &= check (nm, out, 0.02f);
+                // nach dem Loslassen muss es (bis auf Hall) ausklingen
+                const float tail = out.getMagnitude (0, at (2.0), at (0.2));
+                if (tail > 0.05f) { std::printf ("FAIL     %s klingt nach Note-Off weiter (%.3f)\n", nm.toRawUTF8(), tail); allOk = false; }
+                if (v == 0 || m == ParamChoices::kPipe)
+                    writeWav (outDir.getChildFile ("keys_" + juce::File::createLegalFileName (nm.replace (" / ", "_")) + ".wav"), out, sr);
+            }
+        }
+        // Tonhoehe: A4 = 440 Hz in jedem Modell (Pfeifenorgel: Welt ohne Temperierung)
+        for (int m = 0; m < ParamChoices::numKeysModels; ++m)
+        {
+            keysSetup (m, m == ParamChoices::kPipe ? 6 : (m == ParamChoices::kTonewheel ? 5 : 0));
+            setP (proc, ParamID::keysA, m == ParamChoices::kPipe ? 0.0f : 0.3f);
+            setP (proc, ParamID::keysB, 0.0f);
+            proc.prepareToPlay (sr, block);
+            auto out = render (proc, sr, block, 0.7, { { 0, 69, true, 0.8f } });
+            const double hz = estimateHz (out, at (0.3), at (0.08), sr);
+            const bool ok = std::abs (hz - 440.0) < 6.0;
+            std::printf ("%s Tonhoehe %-16s A4 = %.1f Hz\n", ok ? "OK  " : "FAIL", ParamChoices::keysModels[m].toRawUTF8(), hz);
+            allOk &= ok;
+        }
+        // Leslie langsam -> schnell per Mod-Rad: Modulation muss staerker werden
+        {
+            proc.setCurrentProgram (presetIndex ("Jazz Drawbars"));
+            proc.prepareToPlay (sr, block);
+            std::vector<Ev> ev { { at (0.02), 60, true, 0.8f }, { at (0.02), 64, true, 0.8f }, { at (0.02), 67, true, 0.8f } };
+            const int total = at (6.0);
+            juce::AudioBuffer<float> out (2, total), buf (2, block);
+            for (int pos = 0; pos < total; pos += block)
+            {
+                buf.clear();
+                juce::MidiBuffer midi;
+                for (auto& e : ev) if (e.at >= pos && e.at < pos + block) midi.addEvent (juce::MidiMessage::noteOn (1, e.note, e.vel), e.at - pos);
+                if (pos <= at (3.0) && at (3.0) < pos + block) midi.addEvent (juce::MidiMessage::controllerEvent (1, 1, 127), 0);
+                proc.processBlock (buf, midi);
+                for (int ch = 0; ch < 2; ++ch) out.copyFrom (ch, pos, buf, ch, 0, block);
+            }
+            auto spread = [&] (int a, int len)
+            {
+                float lo = 10, hi = 0;
+                for (int s = a; s < a + len; s += at (0.02)) { const float r = out.getRMSLevel (0, s, at (0.02)); lo = std::min (lo, r); hi = std::max (hi, r); }
+                return hi / std::max (lo, 1e-6f);
+            };
+            const float slow = spread (at (1.0), at (0.6)), fast = spread (at (5.0), at (0.6));
+            std::printf ("%s Leslie langsam/schnell: Pegelschwankung %.2f -> %.2f\n", fast > slow ? "OK  " : "FAIL", slow, fast);
+            allOk &= check ("Leslie Fahrt", out) && fast > slow;
+            writeWav (outDir.getChildFile ("keys_leslie_slow_fast.wav"), out, sr);
+        }
+        // Talkbox: Mod-Rad von U nach I -> Spektrum wird heller (mehr Nulldurchgaenge)
+        {
+            proc.setCurrentProgram (presetIndex ("Talk Box Lead"));
+            proc.prepareToPlay (sr, block);
+            const int total = at (3.0);
+            juce::AudioBuffer<float> out (2, total), buf (2, block);
+            for (int pos = 0; pos < total; pos += block)
+            {
+                buf.clear();
+                juce::MidiBuffer midi;
+                if (pos == 0) midi.addEvent (juce::MidiMessage::noteOn (1, 57, 0.9f), 0);
+                const int cc = juce::jlimit (0, 127, (int) (127.0 * pos / total * 1.3));
+                midi.addEvent (juce::MidiMessage::controllerEvent (1, 1, cc), 0);
+                proc.processBlock (buf, midi);
+                for (int ch = 0; ch < 2; ++ch) out.copyFrom (ch, pos, buf, ch, 0, block);
+            }
+            auto zcr = [&] (int a, int len) { int z = 0; for (int s = a + 1; s < a + len; ++s) if ((out.getSample (0, s - 1) < 0) != (out.getSample (0, s) < 0)) ++z; return z; };
+            const int u = zcr (at (0.3), at (0.3)), i = zcr (at (2.5), at (0.3));
+            std::printf ("%s Talkbox U -> I: Nulldurchgaenge %d -> %d\n", i > u ? "OK  " : "FAIL", u, i);
+            allOk &= check ("Talkbox Fahrt", out) && i > u;
+            writeWav (outDir.getChildFile ("keys_talkbox_sweep.wav"), out, sr);
+        }
+        // CPU: Kathedrale Tutti, 10 Toene + Leslie-Orgel + Clav, je 10 s
+        for (auto* pn : { "Passau Dom Tutti", "Gospel Leslie", "Funk Clav 72", "FM Ballade Piano", "Tines + Pad" })
+        {
+            proc.setCurrentProgram (presetIndex (pn));
+            proc.prepareToPlay (sr, block);
+            std::vector<Ev> ev;
+            for (int n : { 36, 43, 48, 52, 55, 60, 64, 67, 72, 76 }) ev.push_back ({ at (0.01), n, true, 0.8f });
+            const auto t0 = juce::Time::getMillisecondCounterHiRes();
+            auto out = render (proc, sr, block, 10.0, ev);
+            const double ms = juce::Time::getMillisecondCounterHiRes() - t0;
+            std::printf ("     CPU %-20s 10 Toene: %.1f %% Echtzeit\n", pn, ms / 100.0);
+            allOk &= check (juce::String (pn) + " (10 Toene)", out);
+        }
+    }
+
     // ---------------------------------------------------------------- 6) Screenshots
     proc.setCurrentProgram (presetIndex ("Growl Bass"));
     proc.prepareToPlay (sr, block);
@@ -467,6 +599,10 @@ int main (int argc, char** argv)
     setP (proc, ParamID::smpGain, 0.0f);
     shot (proc, 3, outDir.getChildFile ("screen_fx.png"));
     shot (proc, 4, outDir.getChildFile ("screen_harmony.png"));
+    proc.setCurrentProgram (presetIndex ("Funk Clav 72"));
+    shot (proc, 5, outDir.getChildFile ("screen_keys_clav.png"));
+    proc.setCurrentProgram (presetIndex ("Notre-Dame Paris Plenum"));
+    shot (proc, 5, outDir.getChildFile ("screen_keys_orgel.png"));
 
     std::printf ("\n%s\n", allOk ? "ALLE TESTS OK" : "ES GIBT FEHLER");
     return allOk ? 0 : 1;
