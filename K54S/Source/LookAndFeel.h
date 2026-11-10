@@ -10,9 +10,10 @@ namespace K54Colours
     inline const juce::Colour panelHi  { 0xff1D1D22 };
     inline const juce::Colour line     { 0xff26262C };
     inline const juce::Colour knobBody { 0xff202026 };
-    inline const juce::Colour accent2  { 0xff6FC3DF };   // Modulation / Loop (kuehles Blau)
-    inline const juce::Colour gold     { 0xffD4AF6A };
-    inline const juce::Colour goldDim  { 0xff9A7430 };
+    // ab 1.4 umschaltbar (ANSICHT): Hauptfarbe, gedimmte Hauptfarbe, Zweitfarbe
+    inline juce::Colour accent2  { 0xff6FC3DF };   // Modulation / Loop (kuehles Blau)
+    inline juce::Colour gold     { 0xffD4AF6A };
+    inline juce::Colour goldDim  { 0xff9A7430 };
     inline const juce::Colour cream    { 0xffF3EEE4 };
     inline const juce::Colour creamDim { 0xffB9B2A4 };
 }
@@ -67,11 +68,58 @@ inline void drawKellerMeter (juce::Graphics& g, juce::Rectangle<float> area, juc
     g.strokePath (pk, stroke);
 }
 
+// Ansicht (ANSICHT-Fenster): farbige Oberflaeche und Akzentfarben der Sektionen
+namespace K54View
+{
+    inline bool colorful = true;
+    inline int accentMode = 0;                       // 0 bunt je Sektion, 1 eigene Akzentfarbe
+    inline juce::Colour customAccent { 0xffffb03a };
+
+    inline juce::Colour rainbow (float t, float alpha = 1.0f)
+    {
+        return juce::Colour::fromHSV (0.80f * juce::jlimit (0.0f, 1.0f, t), 0.70f, 1.0f, alpha);
+    }
+
+    inline juce::ColourGradient rainbowGradient (float x0, float x1, float y, float alpha)
+    {
+        juce::ColourGradient g (rainbow (0.0f, alpha), x0, y, rainbow (1.0f, alpha), x1, y, false);
+        for (int i = 1; i < 8; ++i) g.addColour (i / 8.0, rainbow ((float) i / 8.0f, alpha));
+        return g;
+    }
+
+    inline juce::Colour sectionAccent (const juce::String& title)
+    {
+        if (accentMode == 1) return customAccent;
+        static const juce::uint32 pal[] { 0xffffb03a, 0xffff6f91, 0xff5fe08a, 0xffb58cff, 0xff4fd2ff, 0xffffe066, 0xffff8a5c, 0xff6fe0d0 };
+        return juce::Colour (pal[(juce::uint32) title.hashCode() % 8u]);
+    }
+}
+
 // Sektion im K-54 S-Look: weicher Verlauf, goldene Marke vor dem Titel
 inline void drawK55Section (juce::Graphics& g, juce::Rectangle<int> r, const juce::String& title)
 {
     using namespace K54Colours;
     auto b = r.toFloat();
+    if (K54View::colorful)
+    {
+        const auto acc = K54View::sectionAccent (title);
+        g.setGradientFill (juce::ColourGradient (panelHi.interpolatedWith (acc, 0.12f).withAlpha (0.9f), 0.0f, b.getY(),
+                                                 panel, 0.0f, b.getY() + 110.0f, false));
+        g.fillRoundedRectangle (b, 10.0f);
+        g.setColour (acc.withAlpha (0.32f));
+        g.drawRoundedRectangle (b.reduced (0.5f), 10.0f, 1.0f);
+        juce::ColourGradient top (acc.withAlpha (0.0f), b.getX(), 0.0f, acc.withAlpha (0.0f), b.getRight(), 0.0f, false);
+        top.addColour (0.15, acc.withAlpha (0.9f));
+        top.addColour (0.6, acc.withAlpha (0.3f));
+        g.setGradientFill (top);
+        g.fillRect (b.getX() + 10.0f, b.getY(), b.getWidth() - 20.0f, 2.0f);
+        g.setColour (acc);
+        g.fillRoundedRectangle (b.getX() + 12.0f, b.getY() + 12.0f, 3.0f, 12.0f, 1.5f);
+        g.setColour (cream);
+        g.setFont (K54Fonts::make (K54Fonts::syncopateBold(), 10.0f, 0.28f));
+        g.drawText (title, juce::Rectangle<float> (b.getX() + 22.0f, b.getY() + 8.0f, b.getWidth() - 30.0f, 20.0f), juce::Justification::centredLeft);
+        return;
+    }
     g.setGradientFill (juce::ColourGradient (panelHi.withAlpha (0.75f), 0.0f, b.getY(), panel, 0.0f, b.getY() + 90.0f, false));
     g.fillRoundedRectangle (b, 10.0f);
     g.setColour (line.withAlpha (0.8f));
@@ -86,7 +134,10 @@ inline void drawK55Section (juce::Graphics& g, juce::Rectangle<int> r, const juc
 class K54LookAndFeel : public juce::LookAndFeel_V4
 {
 public:
-    K54LookAndFeel()
+    K54LookAndFeel() { refreshColours(); }
+
+    // nach einem Farbwechsel (ANSICHT) erneut aufrufen
+    void refreshColours()
     {
         using namespace K54Colours;
         setColour (juce::Slider::textBoxTextColourId,        creamDim);

@@ -12,7 +12,7 @@ endif()
 # Windows: Laufzeitbibliothek statisch einbinden (kein extra "Visual C++ Redistributable" noetig)
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
-project(K55 VERSION 1.3.1 LANGUAGES C CXX)
+project(K55 VERSION 1.4.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -113,7 +113,6 @@ target_link_libraries(K55
         juce::juce_audio_utils
         juce::juce_dsp
         juce::juce_audio_formats
-        juce::juce_cryptography
     PUBLIC
         juce::juce_recommended_config_flags
         juce::juce_recommended_lto_flags
@@ -126,5 +125,5 @@ if(K55_BUILD_TESTS)
     target_include_directories(K55Test PRIVATE Source)
     target_compile_definitions(K55Test PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0
         JUCE_STANDALONE_APPLICATION=1 JUCE_MODAL_LOOPS_PERMITTED=1 JucePlugin_Name="K-54 S")
-    target_link_libraries(K55Test PRIVATE K55 K55Assets juce::juce_audio_utils juce::juce_dsp juce::juce_audio_formats juce::juce_cryptography)
+    target_link_libraries(K55Test PRIVATE K55 K55Assets juce::juce_audio_utils juce::juce_dsp juce::juce_audio_formats)
 endif()

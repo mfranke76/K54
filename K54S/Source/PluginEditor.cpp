@@ -56,13 +56,6 @@ K55Main::K55Main (K55Processor& p)
     addChildComponent (fxPanel);
     addChildComponent (keysPanel);
     keysTab.setTooltip ("KEYS-Ebene: Funk Clav, Tine Piano, Tonewheel + Leslie, Kirchenorgeln der Welt, FM, Blues Harp - und Talkbox");
-    // UPDATE-Knopf (rechts in der Reiterzeile) + Update-Fenster
-    addAndMakeVisible (updateButton);
-    updateButton.setTooltip ("Neue Version von keller54.de laden - deine Einstellungen, Presets und Samples bleiben erhalten");
-    updateButton.onClick = [this] { updatePanel.setVisible (true); updatePanel.toFront (true); };
-    updatePanel.onClose = [this] { updatePanel.setVisible (false); };
-    addChildComponent (updatePanel);
-    updater->checkNow (false);   // leise im Hintergrund, hoechstens alle 6 Stunden
     addAndMakeVisible (pitchWheel);
     addAndMakeVisible (modWheel);
     pitchWheel.setTooltip ("Pitch-Wheel (folgt deinem Keyboard, mit der Maus ziehbar)");
@@ -153,9 +146,42 @@ K55Main::K55Main (K55Processor& p)
     keyboard.setWantsKeyboardFocus (false);
     addAndMakeVisible (keyboard);
 
+    // ANSICHT
+    viewSettings = SynthStyle::openSettings();
+    viewStyle.loadFrom (*viewSettings);
+    viewPanel = std::make_unique<SynthViewPanel> (*viewSettings);
+    viewPanel->onChange = [this] (const SynthStyle& s) { applyView (s, true); };
+    addChildComponent (*viewPanel);
+    viewButton.setTooltip (juce::String::fromUTF8 ("Farbschema, eigene Farben, farbige oder schlichte Oberfläche, Ansichten speichern"));
+    viewButton.onClick = [this] { showViewPanel (true); };
+    addAndMakeVisible (viewButton);
+    colorButton.setTooltip (juce::String::fromUTF8 ("Farbige oder schlichte Oberfläche"));
+    colorButton.onClick = [this] { auto s = viewStyle; s.colorful = ! s.colorful; applyView (s, true); };
+    addAndMakeVisible (colorButton);
+
     setSize (W, H);
     setPage (0);
+    applyView (viewStyle, false);
     startTimerHz (25);
+}
+
+void K55Main::applyView (const SynthStyle& s, bool save)
+{
+    viewStyle = s;
+    s.apply();
+    if (save)
+    {
+        viewStyle.saveTo (*viewSettings);
+        viewSettings->saveIfNeeded();
+    }
+    lnf.refreshColours();
+    keyboard.setColour (juce::MidiKeyboardComponent::keyDownOverlayColourId, K54Colours::gold);
+    keyboard.setColour (juce::MidiKeyboardComponent::mouseOverKeyOverlayColourId, K54Colours::gold.withAlpha (0.3f));
+    keyboard.setColour (juce::MidiKeyboardComponent::upDownButtonArrowColourId, K54Colours::gold);
+    colorButton.setToggleState (s.colorful, juce::dontSendNotification);
+    if (viewPanel != nullptr && viewPanel->isVisible()) viewPanel->setStyle (s);
+    sendLookAndFeelChange();
+    repaint();
 }
 
 K55Main::~K55Main()
@@ -245,9 +271,10 @@ void K55Main::resized()
         harmButton.setBounds (x + 8, headerH + 10, 130, 24);
     }
     sizeBox.setBounds (W - 14 - 90, headerH + 10, 90, 24);
-    updateButton.setBounds (W - 14 - 90 - 8 - 130, headerH + 10, 130, 24);
-    statusArea = { 742, headerH + 10, W - 14 - 90 - 8 - 130 - 8 - 742, 24 };
-    updatePanel.setBounds (getLocalBounds());
+    colorButton.setBounds (W - 14 - 90 - 8 - 72, headerH + 10, 72, 24);
+    viewButton.setBounds (colorButton.getX() - 6 - 84, headerH + 10, 84, 24);
+    statusArea = { harmButton.getRight() + 8, headerH + 10, viewButton.getX() - 8 - harmButton.getRight() - 8, 24 };
+    if (viewPanel != nullptr) viewPanel->setBounds (getLocalBounds());
 
     const int top = headerH + 12 + tabH, bodyH = H - headerH - tabH - keyboardH - footerH - 24;
     modPanel.setBounds (14, top, W - 28, bodyH);
@@ -399,8 +426,16 @@ void K55Main::paint (juce::Graphics& g)
         g.setFont (K54Fonts::make (K54Fonts::syncopate(), 7.0f, 0.25f));
         g.drawText (ParamChoices::u8 ("ANALOG \xc2\xb7 WAVETABLE \xc2\xb7 SAMPLE"), juce::Rectangle<int> (588, 56, 210, 12), juce::Justification::centredLeft);
 
-        g.setColour (goldDim.withAlpha (0.6f));
-        g.fillRect (0, headerH - 1, W, 1);
+        if (K54View::colorful)
+        {
+            g.setGradientFill (K54View::rainbowGradient (0.0f, (float) W, 0.0f, 0.85f));
+            g.fillRect (0, headerH - 2, W, 2);
+        }
+        else
+        {
+            g.setColour (goldDim.withAlpha (0.6f));
+            g.fillRect (0, headerH - 1, W, 1);
+        }
     }
 
     // Status in der Reiterzeile
@@ -602,19 +637,6 @@ void K55Main::timerCallback()
     const int v = proc.voicesActive.load();
     const bool pl = proc.isPianoLoading();
     if (v != voices || pl != pianoLoading) { voices = v; pianoLoading = pl; repaint (statusArea); }
-
-    // UPDATE-Knopf: gold, sobald eine neue Version bereitsteht
-    {
-        const auto st = updater->get();
-        const juce::String label = st.updateAvailable ? "UPDATE " + st.latest : juce::String ("UPDATE");
-        if (label != lastUpdateLabel)
-        {
-            lastUpdateLabel = label;
-            updateButton.setButtonText (label);
-            updateButton.setClickingTogglesState (false);
-            updateButton.setToggleState (st.updateAvailable, juce::dontSendNotification);
-        }
-    }
 
     // Table / Pos nur aktiv, wenn der Oszillator auf WAVETABLE steht (nur bei Aenderung anfassen)
     for (int i = 0; i < 3; ++i)

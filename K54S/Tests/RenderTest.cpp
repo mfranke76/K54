@@ -628,6 +628,35 @@ int main (int argc, char** argv)
     proc.setCurrentProgram (presetIndex ("Notre-Dame Paris Plenum"));
     shot (proc, 5, outDir.getChildFile ("screen_keys_orgel.png"));
 
+    // ANSICHT (1.4): Farbschema, eigene Farben, Fenster
+    {
+        auto withMain = [] (std::function<void (K55Main&)> fn)
+        {
+            return [fn] (juce::Component& ed) { for (auto* ch : ed.getChildren()) if (auto* m = dynamic_cast<K55Main*> (ch)) fn (*m); };
+        };
+        shot (proc, 0, outDir.getChildFile ("screen_ansicht_neon.png"), withMain ([] (K55Main& m) { SynthStyle s; s.theme = 1; m.setViewStyle (s); }));
+        shot (proc, 0, outDir.getChildFile ("screen_ansicht_eigene.png"), withMain ([] (K55Main& m)
+        {
+            SynthStyle s; s.theme = SynthStyle::customTheme; s.customMain = 0xffff6a3a; s.customSecond = 0xff7dff6a;
+            s.accentMode = 1; s.customAccent = 0xff00d0ff;
+            m.setViewStyle (s);
+        }));
+        shot (proc, 0, outDir.getChildFile ("screen_ansicht_schlicht.png"), withMain ([] (K55Main& m) { SynthStyle s; s.colorful = false; m.setViewStyle (s); }));
+        shot (proc, 0, outDir.getChildFile ("screen_ansicht_fenster.png"), withMain ([] (K55Main& m) { m.setViewStyle (SynthStyle {}); m.showViewPanel (true); }));
+
+        auto sf = SynthStyle::openSettings();
+        SynthStyle mine; mine.theme = 3; mine.colorful = false;
+        SynthStyle::saveUser (*sf, "Testansicht", mine);
+        bool found = false;
+        for (auto& e : SynthStyle::user (*sf)) found = found || (e.first == "Testansicht" && e.second == mine);
+        SynthStyle::removeUser (*sf, "Testansicht");
+        bool gone = true;
+        for (auto& e : SynthStyle::user (*sf)) gone = gone && e.first != "Testansicht";
+        std::cout << (found && gone ? "OK    " : "FEHLER ") << "Ansicht speichern / loeschen" << std::endl;
+        allOk &= found && gone;
+        SynthStyle {}.apply();
+    }
+
     std::printf ("\n%s\n", allOk ? "ALLE TESTS OK" : "ES GIBT FEHLER");
     return allOk ? 0 : 1;
 }

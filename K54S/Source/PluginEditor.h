@@ -6,7 +6,7 @@
 #include "SamplePanel.h"
 #include "HarmonyPanel.h"
 #include "KeysPanel.h"
-#include "UpdatePanel.h"
+#include "SynthView.h"
 
 // ---------------------------------------------------------------------------
 //  Main-Ausgangspegel neben dem Logo (Stereo, Peak-Hold, Clip-Anzeige)
@@ -214,16 +214,26 @@ private:
     SamplePanel samplePanel;
     FxPanel fxPanel;
     KeysPanel keysPanel;
-    juce::SharedResourcePointer<K54SUpdater> updater;
-    juce::TextButton updateButton { "UPDATE" };
-    UpdatePanel updatePanel { *updater };
-    juce::String lastUpdateLabel;
     int currentPage = 0, voices = 0;
     bool pianoLoading = false;
     int lastWave[3] { -1, -1, -1 };
     bool lastEmpty[3] {};
 
     juce::Rectangle<int> secOsc, secFilter, secEnv, secMod, subFEnv, subAEnv, subOut, subLfo, subPlay, statusArea;
+
+    // ANSICHT (Farben, Oberflaeche, gespeicherte Ansichten) – gilt fuer alle Projekte
+    void applyView (const SynthStyle&, bool save);
+    std::unique_ptr<juce::PropertiesFile> viewSettings;
+    SynthStyle viewStyle;
+    std::unique_ptr<SynthViewPanel> viewPanel;
+    juce::TextButton viewButton { "ANSICHT" }, colorButton { "FARBIG" };
+
+public:
+    const SynthStyle& getViewStyle() const noexcept { return viewStyle; }
+    void setViewStyle (const SynthStyle& s) { applyView (s, false); }
+    void showViewPanel (bool show) { viewPanel->setStyle (viewStyle); viewPanel->setVisible (show); if (show) viewPanel->toFront (false); }
+
+private:
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (K55Main)
 };
