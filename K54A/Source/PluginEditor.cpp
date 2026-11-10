@@ -1462,6 +1462,55 @@ void WaveView::seek (const juce::MouseEvent& e)
 
 //==============================================================================
 // ANSICHT
+ColourSwatch::~ColourSwatch()
+{
+    if (selector != nullptr)
+    {
+        selector->removeChangeListener (this);
+        if (auto* box = selector->findParentComponentOfClass<juce::CallOutBox>())
+            box->dismiss();
+    }
+}
+
+void ColourSwatch::paint (juce::Graphics& g)
+{
+    auto r = getLocalBounds().toFloat().reduced (1.0f);
+    g.setColour (colour);
+    g.fillRoundedRectangle (r, 4.0f);
+    g.setColour (isMouseOver() ? col::text : col::line.brighter (0.4f));
+    g.drawRoundedRectangle (r, 4.0f, 1.2f);
+    g.setColour (colour.getPerceivedBrightness() > 0.55f ? juce::Colour (0xff111111) : juce::Colours::white);
+    g.setFont (font (11.0f, true));
+    g.drawText (letter, r, juce::Justification::centred);
+}
+
+void ColourSwatch::mouseDown (const juce::MouseEvent&)
+{
+    auto sel = std::make_unique<juce::ColourSelector> (juce::ColourSelector::showColourAtTop
+                                                       | juce::ColourSelector::showSliders
+                                                       | juce::ColourSelector::showColourspace);
+    sel->setCurrentColour (colour, juce::dontSendNotification);
+    sel->setColour (juce::ColourSelector::backgroundColourId, col::panel2);
+    sel->setSize (250, 290);
+    sel->addChangeListener (this);
+    selector = sel.get();
+
+    juce::Component* parent = findParentComponentOfClass<juce::AudioProcessorEditor>();
+    if (parent == nullptr) parent = getTopLevelComponent();
+    juce::CallOutBox::launchAsynchronously (std::move (sel), parent->getLocalArea (this, getLocalBounds()), parent);
+}
+
+void ColourSwatch::changeListenerCallback (juce::ChangeBroadcaster* src)
+{
+    if (auto* s = dynamic_cast<juce::ColourSelector*> (src))
+    {
+        colour = s->getCurrentColour().withAlpha (1.0f);
+        repaint();
+        if (onChange) onChange (colour);
+    }
+}
+
+//==============================================================================
 ViewPanel::ViewPanel()
 {
     auto combo = [this] (juce::ComboBox& cb, std::initializer_list<const char*> items)
@@ -1478,7 +1527,8 @@ ViewPanel::ViewPanel()
         addAndMakeVisible (b);
     };
 
-    combo (cbMode,  { "Kurve", "Balken (Terzbänder)", "Spektrogramm + Kurve" });
+    combo (cbMode,  { "Kurve", "Balken (Terzbänder)", "Spektrogramm" });
+    combo (cbSpecColor, { "Themenfarbe", "Regenbogen" });
     combo (cbRange, { "96 dB  (+6 bis -90)", "78 dB  (+6 bis -72)", "66 dB  (+6 bis -60)", "48 dB  (0 bis -48)" });
     combo (cbLine,  { "Dünn", "Normal", "Dick" });
     combo (cbFill,  { "Aus", "Leicht", "Kräftig" });
@@ -1486,14 +1536,66 @@ ViewPanel::ViewPanel()
     cbTheme.onChange = [this] { changed(); };
     for (int i = 0; i < ViewStyle::numThemes; ++i) cbTheme.addItem (u8s (themeName (i)), i + 1);
     addAndMakeVisible (cbTheme);
-    combo (cbMeter, { "LED Ampel (grün / gelb / rot)", "LED in Themenfarbe", "Balken glatt" });
-    combo (cbMeterRange, { "60 dB  (0 bis -60)", "48 dB  (0 bis -48)", "24 dB  (0 bis -24, Mastering)" });
-    combo (cbHold,  { "1 Sekunde", "3 Sekunden", "Bis Klick / Reset" });
-    combo (cbLayout, { "Standard", "Großes Spektrum" });
-    combo (cbSpecColor, { "Themenfarbe", "Regenbogen" });
     combo (cbSurface, { "Schlicht", "Farbig" });
-    toggle (btnGlow);
-    toggle (btnPeaks);
+    combo (cbAccent, { "Bunt (je Feld)", "Eigene Farbe (A)" });
+    combo (cbMeter, { "LED Ampel", "LED Themenfarbe", "Balken glatt" });
+    combo (cbMeterRange, { "60 dB", "48 dB", "24 dB (Mastering)" });
+    combo (cbHold,  { "1 Sekunde", "3 Sekunden", "Bis Klick / Reset" });
+    for (auto* b : { &btnGlow, &btnPeaks, &btnShowTonal, &btnShowHist, &btnShowLoud, &btnShowMeter })
+        toggle (*b);
+
+    // eigene Farben
+    const char* letters[] { "M", "R", "D", "A" };
+    const char* tips[] { "Farbe Mix", "Farbe Referenz", "Farbe Differenzkurve", "Akzentfarbe der Felder" };
+    for (int i = 0; i < 4; ++i)
+    {
+        auto& sw = swatches[(size_t) i];
+        sw.letter = letters[i];
+        sw.setTooltip (u8s (tips[i]));
+        sw.onChange = [this, i] (juce::Colour c)
+        {
+            const auto argb = c.getARGB();
+            if (i == 0) current.customMix = argb;
+            if (i == 1) current.customRef = argb;
+            if (i == 2) current.customDiff = argb;
+            if (i == 3) { current.customAccent = argb; cbAccent.setSelectedItemIndex (1, juce::dontSendNotification); }
+            else        cbTheme.setSelectedItemIndex (ViewStyle::customTheme, juce::dontSendNotification);
+            changed();
+        };
+        swatchRow.addAndMakeVisible (sw);
+    }
+    addAndMakeVisible (swatchRow);
+
+    // Ansicht-Presets
+    cbPreset.setTextWhenNothingSelected (u8s ("– wählen –"));
+    cbPreset.onChange = [this]
+    {
+        const int idx = cbPreset.getSelectedId() - 1;
+        if (idx >= 0 && idx < (int) presetList.size())
+        {
+            setStyle (presetList[(size_t) idx].second);
+            changed();
+            cbPreset.setSelectedId (idx + 1, juce::dontSendNotification);
+        }
+        btnDelete.setEnabled (idx >= numBuiltIn);
+    };
+    addAndMakeVisible (cbPreset);
+    btnSave.setButtonText (u8s ("SPEICHERN …"));
+    btnSave.onClick = [this] { askPresetName(); };
+    btnDelete.setButtonText (u8s ("LÖSCHEN"));
+    btnDelete.onClick = [this]
+    {
+        const int idx = cbPreset.getSelectedId() - 1;
+        if (settings != nullptr && idx >= numBuiltIn && idx < (int) presetList.size())
+        {
+            ViewPresets::removeUser (*settings, presetList[(size_t) idx].first);
+            refreshPresets();
+            if (onPresetsChanged) onPresetsChanged();
+        }
+    };
+    presetBtnRow.addAndMakeVisible (btnSave);
+    presetBtnRow.addAndMakeVisible (btnDelete);
+    addAndMakeVisible (presetBtnRow);
 
     btnDefaults.setButtonText ("STANDARD");
     btnDefaults.onClick = [this] { setStyle (ViewStyle {}); changed(); };
@@ -1503,87 +1605,172 @@ ViewPanel::ViewPanel()
     btnClose.onClick = [this] { setVisible (false); };
     addAndMakeVisible (btnClose);
 
-    left  = { { "#SPEKTRUM" }, { "Darstellung", &cbMode }, { "Farbe", &cbSpecColor }, { "dB-Bereich", &cbRange }, { "Linienstärke", &cbLine },
-              { "Füllung", &cbFill }, { "Raster", &cbGrid }, { "Leuchten", &btnGlow }, { "Spitzen markieren", &btnPeaks } };
-    right = { { "#FARBEN" }, { "Farbschema", &cbTheme }, { "#PEGEL" }, { "Stil", &cbMeter }, { "Bereich", &cbMeterRange },
-              { "Peak-Hold", &cbHold }, { "#LAYOUT" }, { "Aufteilung", &cbLayout }, { "Oberfläche", &cbSurface } };
+    cols[0] = { { "#SPEKTRUM" }, { "Darstellung", &cbMode }, { "Farbe", &cbSpecColor }, { "dB-Bereich", &cbRange },
+                { "Linienstärke", &cbLine }, { "Füllung", &cbFill }, { "Raster", &cbGrid }, { "Leuchten", &btnGlow },
+                { "Spitzen zeigen", &btnPeaks } };
+    cols[1] = { { "#FARBEN" }, { "Farbschema", &cbTheme }, { "Eigene Farben", &swatchRow }, { "Oberfläche", &cbSurface },
+                { "Feld-Farben", &cbAccent }, { "#PEGEL" }, { "Stil", &cbMeter }, { "Bereich", &cbMeterRange },
+                { "Peak-Hold", &cbHold } };
+    cols[2] = { { "#FELDER ZEIGEN" }, { "Tonale Balance", &btnShowTonal }, { "Verlauf / Stereo", &btnShowHist },
+                { "Lautheit", &btnShowLoud }, { "Pegel", &btnShowMeter }, { "#GESPEICHERTE ANSICHTEN" },
+                { "Ansicht", &cbPreset }, { "", &presetBtnRow } };
+}
+
+void ViewPanel::setSettings (juce::PropertiesFile* s)
+{
+    settings = s;
+    refreshPresets();
+}
+
+void ViewPanel::refreshPresets()
+{
+    presetList = ViewPresets::builtIn();
+    numBuiltIn = (int) presetList.size();
+    if (settings != nullptr)
+        for (auto& p : ViewPresets::user (*settings))
+            presetList.push_back (p);
+
+    cbPreset.clear (juce::dontSendNotification);
+    for (int i = 0; i < (int) presetList.size(); ++i)
+    {
+        if (i == numBuiltIn) cbPreset.addSectionHeading (u8s ("Eigene"));
+        cbPreset.addItem (presetList[(size_t) i].first, i + 1);
+    }
+    selectMatchingPreset();
+}
+
+void ViewPanel::selectMatchingPreset()
+{
+    int match = 0;
+    for (int i = (int) presetList.size() - 1; i >= 0; --i)
+        if (presetList[(size_t) i].second == current) match = i + 1;
+    cbPreset.setSelectedId (match, juce::dontSendNotification);
+    btnDelete.setEnabled (match - 1 >= numBuiltIn);
+}
+
+void ViewPanel::askPresetName()
+{
+    auto* aw = new juce::AlertWindow (u8s ("Ansicht speichern"), u8s ("Name für diese Ansicht:"), juce::MessageBoxIconType::NoIcon, this);
+    const int idx = cbPreset.getSelectedId() - 1;
+    aw->addTextEditor ("name", idx >= numBuiltIn && idx < (int) presetList.size() ? presetList[(size_t) idx].first : u8s ("Meine Ansicht"));
+    aw->addButton (u8s ("Speichern"), 1, juce::KeyPress (juce::KeyPress::returnKey));
+    aw->addButton (u8s ("Abbrechen"), 0, juce::KeyPress (juce::KeyPress::escapeKey));
+    juce::Component::SafePointer<ViewPanel> safe (this);
+    aw->enterModalState (true, juce::ModalCallbackFunction::create ([safe, aw] (int result)
+    {
+        if (safe == nullptr || result != 1) return;
+        const auto name = aw->getTextEditorContents ("name").trim();
+        if (name.isNotEmpty()) safe->savePreset (name);
+    }), true);
+}
+
+void ViewPanel::savePreset (const juce::String& name)
+{
+    if (settings == nullptr) return;
+    ViewPresets::saveUser (*settings, name, getStyle());
+    refreshPresets();
+    if (onPresetsChanged) onPresetsChanged();
 }
 
 void ViewPanel::setStyle (const ViewStyle& s)
 {
     loading = true;
+    current = s;
     cbMode.setSelectedItemIndex (s.specMode, juce::dontSendNotification);
+    cbSpecColor.setSelectedItemIndex (s.specColor, juce::dontSendNotification);
     cbRange.setSelectedItemIndex (s.range, juce::dontSendNotification);
     cbLine.setSelectedItemIndex (s.line, juce::dontSendNotification);
     cbFill.setSelectedItemIndex (s.fill, juce::dontSendNotification);
     cbGrid.setSelectedItemIndex (s.grid, juce::dontSendNotification);
     cbTheme.setSelectedItemIndex (s.theme, juce::dontSendNotification);
+    cbSurface.setSelectedItemIndex (s.colorful ? 1 : 0, juce::dontSendNotification);
+    cbAccent.setSelectedItemIndex (s.accentMode, juce::dontSendNotification);
     cbMeter.setSelectedItemIndex (s.meterStyle, juce::dontSendNotification);
     cbMeterRange.setSelectedItemIndex (s.meterRange, juce::dontSendNotification);
     cbHold.setSelectedItemIndex (s.hold, juce::dontSendNotification);
-    cbLayout.setSelectedItemIndex (s.layout, juce::dontSendNotification);
-    cbSpecColor.setSelectedItemIndex (s.specColor, juce::dontSendNotification);
-    cbSurface.setSelectedItemIndex (s.colorful ? 1 : 0, juce::dontSendNotification);
-    btnGlow.setToggleState (s.glow, juce::dontSendNotification);
-    btnPeaks.setToggleState (s.peaks, juce::dontSendNotification);
-    btnGlow.setButtonText (s.glow ? "AN" : "AUS");
-    btnPeaks.setButtonText (s.peaks ? "AN" : "AUS");
+
+    auto setT = [] (juce::TextButton& b, bool on) { b.setToggleState (on, juce::dontSendNotification); b.setButtonText (on ? "AN" : "AUS"); };
+    setT (btnGlow, s.glow);
+    setT (btnPeaks, s.peaks);
+    setT (btnShowTonal, s.showTonal);
+    setT (btnShowHist, s.showHist);
+    setT (btnShowLoud, s.showLoud);
+    setT (btnShowMeter, s.showMeter);
+
+    swatches[0].colour = juce::Colour (s.customMix);
+    swatches[1].colour = juce::Colour (s.customRef);
+    swatches[2].colour = juce::Colour (s.customDiff);
+    swatches[3].colour = juce::Colour (s.customAccent);
+    for (auto& sw : swatches) sw.repaint();
     loading = false;
+    selectMatchingPreset();
+    repaint();
 }
 
 ViewStyle ViewPanel::getStyle() const
 {
-    ViewStyle s;
+    ViewStyle s = current;
     s.specMode   = juce::jmax (0, cbMode.getSelectedItemIndex());
+    s.specColor  = juce::jmax (0, cbSpecColor.getSelectedItemIndex());
     s.range      = juce::jmax (0, cbRange.getSelectedItemIndex());
     s.line       = juce::jmax (0, cbLine.getSelectedItemIndex());
     s.fill       = juce::jmax (0, cbFill.getSelectedItemIndex());
     s.grid       = juce::jmax (0, cbGrid.getSelectedItemIndex());
     s.theme      = juce::jmax (0, cbTheme.getSelectedItemIndex());
+    s.colorful   = cbSurface.getSelectedItemIndex() != 0;
+    s.accentMode = juce::jmax (0, cbAccent.getSelectedItemIndex());
     s.meterStyle = juce::jmax (0, cbMeter.getSelectedItemIndex());
     s.meterRange = juce::jmax (0, cbMeterRange.getSelectedItemIndex());
     s.hold       = juce::jmax (0, cbHold.getSelectedItemIndex());
-    s.layout     = juce::jmax (0, cbLayout.getSelectedItemIndex());
-    s.specColor  = juce::jmax (0, cbSpecColor.getSelectedItemIndex());
-    s.colorful   = cbSurface.getSelectedItemIndex() != 0;
     s.glow       = btnGlow.getToggleState();
     s.peaks      = btnPeaks.getToggleState();
+    s.showTonal  = btnShowTonal.getToggleState();
+    s.showHist   = btnShowHist.getToggleState();
+    s.showLoud   = btnShowLoud.getToggleState();
+    s.showMeter  = btnShowMeter.getToggleState();
     return s;
 }
 
 void ViewPanel::changed()
 {
-    if (! loading && onChange)
-        onChange (getStyle());
+    if (loading) return;
+    current = getStyle();
+    selectMatchingPreset();
+    repaint();
+    if (onChange) onChange (current);
 }
 
 void ViewPanel::resized()
 {
-    box = getLocalBounds().toFloat().withSizeKeepingCentre (800.0f, 440.0f);
+    box = getLocalBounds().toFloat().withSizeKeepingCentre (1010.0f, 470.0f);
     labels.clear();
     headers.clear();
 
-    auto place = [this] (std::vector<Row>& rows, float x)
+    for (int c = 0; c < 3; ++c)
     {
-        float y = box.getY() + 70.0f;
-        for (auto& r : rows)
+        const float x = box.getX() + 28.0f + (float) c * 330.0f;
+        float y = box.getY() + 66.0f;
+        for (auto& r : cols[(size_t) c])
         {
             if (r.comp == nullptr)
-                headers.push_back ({ u8s (r.label + 1), { x, y + 6.0f, 340.0f, 20.0f } });
+                headers.push_back ({ u8s (r.label + 1), { x, y + 6.0f, 300.0f, 20.0f } });
             else
             {
-                labels.push_back ({ u8s (r.label), { x, y + 2.0f, 140.0f, 26.0f } });
+                labels.push_back ({ u8s (r.label), { x, y + 2.0f, 120.0f, 26.0f } });
                 const bool isToggle = dynamic_cast<juce::TextButton*> (r.comp) != nullptr;
-                r.comp->setBounds ((int) x + 146, (int) y + 3, isToggle ? 70 : 214, 26);
+                r.comp->setBounds ((int) x + 124, (int) y + 3, isToggle ? 70 : 176, 26);
             }
             y += 34.0f;
         }
-    };
-    place (left, box.getX() + 30.0f);
-    place (right, box.getX() + 420.0f);
+    }
 
-    btnDefaults.setBounds ((int) box.getX() + 30, (int) box.getBottom() - 46, 110, 30);
-    btnClose.setBounds ((int) box.getRight() - 140, (int) box.getBottom() - 46, 110, 30);
+    for (int i = 0; i < 4; ++i)
+        swatches[(size_t) i].setBounds (i * 44, 0, 38, 26);
+    btnSave.setBounds (0, 0, 104, 26);
+    btnDelete.setBounds (110, 0, 66, 26);
+
+    btnDefaults.setBounds ((int) box.getX() + 28, (int) box.getBottom() - 46, 110, 30);
+    btnClose.setBounds ((int) box.getRight() - 138, (int) box.getBottom() - 46, 110, 30);
 }
 
 void ViewPanel::paint (juce::Graphics& g)
@@ -1591,18 +1778,24 @@ void ViewPanel::paint (juce::Graphics& g)
     g.fillAll (juce::Colours::black.withAlpha (0.6f));
     g.setColour (col::panel);
     g.fillRoundedRectangle (box, 8.0f);
+    if (colorfulUi())
+    {
+        g.setGradientFill (rainbowGradient (box.getX() + 10.0f, box.getRight() - 10.0f, 0.0f, 0.9f));
+        g.fillRect (box.getX() + 10.0f, box.getY(), box.getWidth() - 20.0f, 2.0f);
+    }
     g.setColour (col::gold);
     g.drawRoundedRectangle (box, 8.0f, 1.5f);
 
     g.setFont (font (20.0f, true));
-    g.drawText ("ANSICHT", box.reduced (30.0f, 18.0f).withHeight (24.0f), juce::Justification::centredLeft);
+    g.drawText ("ANSICHT", box.reduced (28.0f, 16.0f).withHeight (24.0f), juce::Justification::centredLeft);
     g.setFont (font (11.5f));
     g.setColour (col::dim);
-    g.drawText (u8s ("Änderungen wirken sofort und gelten für alle Projekte"), box.reduced (30.0f, 18.0f).withHeight (24.0f),
-                juce::Justification::centredRight);
+    g.drawText (u8s ("Wirkt sofort · gilt für alle Projekte · eigene Ansichten rechts speichern"),
+                box.reduced (28.0f, 16.0f).withHeight (24.0f), juce::Justification::centredRight);
 
     g.setColour (col::line);
-    g.drawVerticalLine ((int) box.getX() + 400, box.getY() + 74.0f, box.getBottom() - 64.0f);
+    for (int c = 1; c < 3; ++c)
+        g.drawVerticalLine ((int) (box.getX() + 28.0f + (float) c * 330.0f - 14.0f), box.getY() + 70.0f, box.getBottom() - 62.0f);
 
     for (auto& h : headers)
     {
@@ -1616,7 +1809,6 @@ void ViewPanel::paint (juce::Graphics& g)
         g.setFont (font (12.5f));
         g.drawText (l.first, l.second, juce::Justification::centredLeft);
     }
-
 }
 
 //==============================================================================
@@ -1643,6 +1835,9 @@ void HelpOverlay::paint (juce::Graphics& g)
     add ("Darstellung als Kurve, Terzband-Balken oder Spektrogramm, dB-Bereich, Linien, Füllung, Leuchten, Spitzen-Markierung, "
          "5 Farbschemata, Pegel als LED oder Balken mit wählbarem Bereich und Peak-Hold, Layout \"Großes Spektrum\". "
          "Klick auf die Pegel setzt die Spitzen zurück.\n\n", 13.5f, col::text);
+    add ("Schnellumschalter  ", 13.5f, col::goldHi, true);
+    add ("Rechts im Spektrum-Feld: gespeicherte Ansicht wählen, KURVE / BALKEN / SPEKTRO und FARBIG. Unter ANSICHT: eigene Farben "
+         "(Mix, Referenz, Differenz, Akzent), Felder ein- und ausblenden und eigene Ansichten speichern.\n\n", 13.5f, col::text);
     add ("Tonale Balance  ", 13.5f, col::goldHi, true);
     add ("Vergleicht 6 Frequenzbereiche deines Mixes mit der Referenz, unabhängig von der Lautstärke. "
          "Grün = passt (±1,5 dB), Gelb = etwas, Orange = deutlich. + heißt: dein Mix hat dort mehr.\n\n", 13.5f, col::text);
@@ -1830,7 +2025,41 @@ Content::Content (AnalyzerProcessor& p) : proc (p)
     btnView.onClick = [this] { showView (true); };
     addAndMakeVisible (btnView);
     viewPanel.onChange = [this] (const ViewStyle& st) { applyStyle (st, true); };
+    viewPanel.onPresetsChanged = [this] { refreshQuickPresets(); };
+    viewPanel.setSettings (&proc.getSettings());
     addChildComponent (viewPanel);
+
+    // Schnellumschalter im Spektrum-Feld
+    auto quick = [this] (juce::TextButton& b, const char* text, const char* tip, std::function<void (ViewStyle&)> fn)
+    {
+        b.setButtonText (u8s (text));
+        b.setTooltip (u8s (tip));
+        setAccent (b, col::goldHi);
+        b.onClick = [this, fn]
+        {
+            auto st = style;
+            fn (st);
+            applyStyle (st, true);
+        };
+        addAndMakeVisible (b);
+    };
+    quick (btnQCurve, "KURVE", "Spektrum als Kurve", [] (ViewStyle& st) { st.specMode = 0; });
+    quick (btnQBars, "BALKEN", "Spektrum als Terzband-Balken", [] (ViewStyle& st) { st.specMode = 1; });
+    quick (btnQSpectro, "SPEKTRO", "Spektrogramm mit Kurve", [] (ViewStyle& st) { st.specMode = 2; });
+    quick (btnQColor, "FARBIG", "Farbig (Regenbogen) oder schlicht",
+           [] (ViewStyle& st) { const bool on = ! (st.colorful && st.specColor == 1); st.colorful = on; st.specColor = on ? 1 : 0; });
+    cbQuickPreset.setTextWhenNothingSelected (u8s ("Eigene Ansicht"));
+    cbQuickPreset.setTooltip (u8s ("Gespeicherte Ansicht wählen"));
+    cbQuickPreset.onChange = [this]
+    {
+        const int id = cbQuickPreset.getSelectedId();
+        if (id == 999) { refreshQuickPresets(); showView (true); return; }
+        auto list = ViewPresets::builtIn();
+        for (auto& up : ViewPresets::user (proc.getSettings())) list.push_back (up);
+        if (id >= 1 && id <= (int) list.size())
+            applyStyle (list[(size_t) id - 1].second, true);
+    };
+    addAndMakeVisible (cbQuickPreset);
 
     meters.onClick = [this]
     {
@@ -1852,13 +2081,21 @@ void Content::applyStyle (const ViewStyle& s, bool save)
 {
     style = s;
     if (save) style.save (proc.getSettings());
+    customThemeColours() = { juce::Colour (s.customMix), juce::Colour (s.customRef), juce::Colour (s.customDiff) };
     currentThemeIndex() = s.theme;
     colorfulUi() = s.colorful;
     spectrum.setStyle (s);
     meters.style = s.meterStyle;
     meters.floorDb = s.meterFloor();
     meters.holdFrames = s.holdFrames();
-    bigSpec = s.layout == 1;
+    bigSpec = ! s.bottomRow();
+
+    btnQCurve.setToggleState (s.specMode == 0, juce::dontSendNotification);
+    btnQBars.setToggleState (s.specMode == 1, juce::dontSendNotification);
+    btnQSpectro.setToggleState (s.specMode == 2, juce::dontSendNotification);
+    btnQColor.setToggleState (s.colorful && s.specColor == 1, juce::dontSendNotification);
+    if (viewPanel.isVisible()) viewPanel.setStyle (s);
+    refreshQuickPresets();
 
     const auto& th = theme();
     for (auto* b : { &btnA, &btnShowMix }) setAccent (*b, th.mix);
@@ -1869,6 +2106,29 @@ void Content::applyStyle (const ViewStyle& s, bool save)
     updateVisibility();
     resized();
     repaint();
+}
+
+juce::Colour Content::accent (juce::Colour def) const
+{
+    return style.accentMode == 1 ? juce::Colour (style.customAccent) : def;
+}
+
+void Content::refreshQuickPresets()
+{
+    cbQuickPreset.clear (juce::dontSendNotification);
+    auto list = ViewPresets::builtIn();
+    const int numBuiltIn = (int) list.size();
+    for (auto& p : ViewPresets::user (proc.getSettings())) list.push_back (p);
+    int match = 0;
+    for (int i = 0; i < (int) list.size(); ++i)
+    {
+        if (i == numBuiltIn) cbQuickPreset.addSectionHeading (u8s ("Eigene"));
+        cbQuickPreset.addItem (list[(size_t) i].first, i + 1);
+        if (match == 0 && list[(size_t) i].second == style) match = i + 1;
+    }
+    cbQuickPreset.addSeparator();
+    cbQuickPreset.addItem (u8s ("Einstellen …"), 999);
+    cbQuickPreset.setSelectedId (match, juce::dontSendNotification);
 }
 
 void Content::showView (bool s)
@@ -1926,11 +2186,14 @@ void Content::updateVisibility()
         c->setVisible (pro);
 
     const bool showScope = pro && scopeTab;
-    scope.setVisible (showScope && ! bigSpec);
-    history.setVisible (! showScope && ! bigSpec);
-    tonal.setVisible (! bigSpec);
-    btnTabHist.setVisible (pro && ! bigSpec);
-    btnTabScope.setVisible (pro && ! bigSpec);
+    scope.setVisible (showScope && style.showHist);
+    history.setVisible (! showScope && style.showHist);
+    tonal.setVisible (style.showTonal);
+    btnTabHist.setVisible (pro && style.showHist);
+    btnTabScope.setVisible (pro && style.showHist);
+    loud.setVisible (style.showLoud);
+    btnAuto.setVisible (style.showLoud);
+    meters.setVisible (style.showMeter);
     btnTabHist.setToggleState (! showScope, juce::dontSendNotification);
     btnTabScope.setToggleState (showScope, juce::dontSendNotification);
     loud.pro = pro;
@@ -2039,11 +2302,29 @@ void Content::exportReport()
 void Content::resized()
 {
     rHeader = { 0, 0, W, 58 };
-    rSpec   = { 12, 66, 880, bigSpec ? 580 : 400 };
-    rTonal  = { 12, 474, 520, 172 };
-    rHist   = { 540, 474, 352, 172 };
-    rLoud   = { 904, 66, 364, 330 };
-    rMeter  = { 904, 404, 364, 242 };
+    const int leftW = style.rightColumn() ? 880 : 1256;
+    rSpec   = { 12, 66, leftW, style.bottomRow() ? 400 : 580 };
+    if (style.showTonal && style.showHist)
+    {
+        const int tw = (leftW - 8) * 520 / 872;
+        rTonal = { 12, 474, tw, 172 };
+        rHist  = { 20 + tw, 474, leftW - tw - 8, 172 };
+    }
+    else
+    {
+        rTonal = { 12, 474, leftW, 172 };
+        rHist  = { 12, 474, leftW, 172 };
+    }
+    if (style.showLoud && style.showMeter)
+    {
+        rLoud  = { 904, 66, 364, 330 };
+        rMeter = { 904, 404, 364, 242 };
+    }
+    else
+    {
+        rLoud  = { 904, 66, 364, 580 };
+        rMeter = { 904, 66, 364, 580 };
+    }
     rRef    = { 12, 654, 1256, 134 };
 
     btnSimple.setBounds (258, 17, 76, 26);
@@ -2063,6 +2344,15 @@ void Content::resized()
     btnShowRef.setBounds (sx + 168, sy, 92, 24);
     btnShowDiff.setBounds (sx + 264, sy, 92, 24);
     btnHold.setBounds (sx + 360, sy, 56, 24);
+
+    {
+        const int qr = rSpec.getRight() - 10;
+        btnQColor.setBounds (qr - 62, sy, 62, 24);
+        btnQSpectro.setBounds (qr - 62 - 8 - 66, sy, 66, 24);
+        btnQBars.setBounds (qr - 62 - 8 - 66 - 2 - 62, sy, 62, 24);
+        btnQCurve.setBounds (qr - 62 - 8 - 66 - 2 - 62 - 2 - 58, sy, 58, 24);
+        cbQuickPreset.setBounds (btnQCurve.getX() - 8 - 150, sy, 150, 24);
+    }
 
     const int y2 = rSpec.getY() + 36;
     lbSlope.setBounds (sx + 4, y2, 66, 24);    cbSlope.setBounds (sx + 74, y2, 98, 24);
@@ -2092,7 +2382,7 @@ void Content::resized()
     btnClear.setBounds (rx + 12, ry + 100, 148, 24);
     wave.setBounds (rx + 168, ry + 10, 712, 114);
 
-    const int x0 = rLoud.getX();
+    const int x0 = 904;
     btnSync.setBounds (x0, ry + 8, 150, 26);
     btnPlay.setBounds (x0 + 158, ry + 8, 92, 26);
     lbGain.setBounds (x0, ry + 38, 40, 26);
@@ -2200,22 +2490,21 @@ void Content::paint (juce::Graphics& g)
                     466, 47, 376, 11, juce::Justification::centred);
     }
 
-    panel (g, rSpec, u8s ("SPEKTRUM"), juce::Colour (0xffffb03a));
+    panel (g, rSpec, u8s ("SPEKTRUM"), accent (juce::Colour (0xffffb03a)));
     g.setColour (col::dim);
     g.setFont (font (10.0f));
     if (! pro)
         g.drawText (u8s ("20 Hz – 20 kHz"), rSpec.getX() + 12, rSpec.getY() + 24, 90, 12, juce::Justification::centredLeft);
-    else
-        g.drawText (u8s ("20 Hz – 20 kHz"), rSpec.getX() + 430, rSpec.getY() + 13, 120, 12, juce::Justification::centredLeft);
 
-    if (! bigSpec)
-    {
-        panel (g, rTonal, u8s ("TONALE BALANCE  ·  Mix gegenüber Referenz"), juce::Colour (0xffff6f91));
-        panel (g, rHist, pro && scopeTab ? u8s ("STEREO") : u8s ("VERLAUF  ·  Short-Term, 60 s"), juce::Colour (0xff5fe08a));
-    }
-    panel (g, rLoud, u8s ("LAUTHEIT"), juce::Colour (0xffb58cff));
-    panel (g, rMeter, u8s ("PEGEL"), juce::Colour (0xff4fd2ff));
-    panel (g, rRef, {}, theme().ref);
+    if (style.showTonal)
+        panel (g, rTonal, u8s ("TONALE BALANCE  ·  Mix gegenüber Referenz"), accent (juce::Colour (0xffff6f91)));
+    if (style.showHist)
+        panel (g, rHist, pro && scopeTab ? u8s ("STEREO") : u8s ("VERLAUF  ·  Short-Term, 60 s"), accent (juce::Colour (0xff5fe08a)));
+    if (style.showLoud)
+        panel (g, rLoud, u8s ("LAUTHEIT"), accent (juce::Colour (0xffb58cff)));
+    if (style.showMeter)
+        panel (g, rMeter, u8s ("PEGEL"), accent (juce::Colour (0xff4fd2ff)));
+    panel (g, rRef, {}, accent (theme().ref));
 
     g.setColour (theme().ref);
     g.setFont (font (12.0f, true));
@@ -2226,7 +2515,7 @@ void Content::paint (juce::Graphics& g)
     g.setColour (match && proc.hasReference() ? col::text : col::dim);
     const juce::String m = ! proc.hasReference() ? u8s ("–")
                          : (match ? u8s ("Angleich ") + fmt (proc.getMatchGainDb(), 1, true) + " dB" : u8s ("aus"));
-    g.drawText (m, rLoud.getX() + 198, rRef.getY() + 68, 166, 26, juce::Justification::centredLeft);
+    g.drawText (m, 904 + 198, rRef.getY() + 68, 166, 26, juce::Justification::centredLeft);
 }
 
 void Content::tick()
@@ -2406,7 +2695,7 @@ void Content::tick()
     if (history.isVisible()) history.repaint();
     if (scope.isVisible()) scope.repaint();
     wave.repaint();
-    repaint (rRef.withTrimmedLeft (rLoud.getX() - rRef.getX()));
+    repaint (rRef.withTrimmedLeft (904 - rRef.getX()));
     repaint (rHeader.withTrimmedLeft (460).withWidth (390));
 }
 

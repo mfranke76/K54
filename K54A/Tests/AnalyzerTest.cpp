@@ -477,21 +477,47 @@ int main (int argc, char** argv)
             setParam (*proc, "speed", 3.0f);
 
             vs = {};
-            vs.layout = 1; vs.theme = 2; vs.meterStyle = 2; vs.line = 2; vs.meterRange = 2;
+            vs.showTonal = vs.showHist = false; vs.theme = 2; vs.meterStyle = 2; vs.line = 2; vs.meterRange = 2;
             c.applyStyle (vs, false);
             ticks (40);
             snap ("screen_gross.png");
 
+
+            // 1.5: eigene Farben, Felder, Presets
             vs = {};
-            vs.theme = 4;
+            vs.theme = ViewStyle::customTheme; vs.customMix = 0xffff3d7f; vs.customRef = 0xff7dff6a; vs.customDiff = 0xfffff066;
+            vs.accentMode = 1; vs.customAccent = 0xff00d0ff; vs.specColor = 0; vs.showHist = false; vs.showMeter = false;
+            c.applyStyle (vs, false);
+            ticks (30);
+            snap ("screen_eigene_farben.png");
+
+            vs = ViewPresets::builtIn()[4].second;   // Nur Spektrum
+            c.applyStyle (vs, false);
+            ticks (30);
+            snap ("screen_nur_spektrum.png");
+
+            {
+                ViewStyle mine; mine.theme = 3; mine.showLoud = false;
+                ViewPresets::saveUser (proc->getSettings(), "Testansicht", mine);
+                auto u = ViewPresets::user (proc->getSettings());
+                bool found = false;
+                for (auto& e : u) found = found || (e.first == "Testansicht" && e.second == mine);
+                check (found, "Eigene Ansicht speichern und wieder laden");
+                ViewPresets::removeUser (proc->getSettings(), "Testansicht");
+                bool gone = true;
+                for (auto& e : ViewPresets::user (proc->getSettings())) gone = gone && e.first != "Testansicht";
+                check (gone, "Eigene Ansicht löschen");
+            }
+
+            vs = {};
             c.applyStyle (vs, false);
             c.showView (true);
-            ticks (5);
+            ticks (3);
             snap ("screen_ansicht.png");
             c.showView (false);
 
             ViewStyle a, b2;
-            a.theme = 3; a.specMode = 2; a.hold = 2; a.glow = false;
+            a.theme = 5; a.specMode = 2; a.hold = 2; a.glow = false; a.customMix = 0xff123456; a.showLoud = false;
             a.save (proc->getSettings());
             b2.load (proc->getSettings());
             check (a == b2, "Ansicht speichern und laden");

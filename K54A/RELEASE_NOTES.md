@@ -1,5 +1,11 @@
 K-54 Analyzer · Keller54 · by Frank E. – BETA
 
+Neu in 1.5.0 – so wie du es brauchst:
+- Eigene Farben: Farbwähler für Mix, Referenz, Differenzkurve und die Akzentfarbe der Felder
+- Felder einzeln ein- und ausblenden: Tonale Balance, Verlauf/Stereo, Lautheit, Pegel – das Spektrum wird automatisch größer
+- Ansichten speichern: eigene Ansichten unter einem Namen sichern, dazu fertige Ansichten (Mixing, Mastering, Spektrogramm groß, Nur Spektrum, Klassisch)
+- Schnellumschalter im Spektrum-Feld: Ansicht wählen, KURVE / BALKEN / SPEKTRO, FARBIG
+
 Neu in 1.4.0 – farbiger:
 - Spektrum in Regenbogenfarben (Bass rot bis Höhen violett), auch als Terzband-Balken und Spektrogramm
 - Farbige Oberfläche: Felder mit eigener Akzentfarbe, Farbverläufe, Regenbogenlinie im Kopf, glänzende Knöpfe

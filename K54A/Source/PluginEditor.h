@@ -193,6 +193,25 @@ private:
     AnalyzerProcessor& proc;
 };
 
+class ColourSwatch : public juce::Component,
+                     public juce::SettableTooltipClient,
+                     private juce::ChangeListener
+{
+public:
+    ~ColourSwatch() override;
+    void paint (juce::Graphics&) override;
+    void mouseDown (const juce::MouseEvent&) override;
+    void mouseEnter (const juce::MouseEvent&) override { repaint(); }
+    void mouseExit (const juce::MouseEvent&) override { repaint(); }
+    juce::Colour colour { juce::Colours::grey };
+    juce::String letter;
+    std::function<void (juce::Colour)> onChange;
+
+private:
+    void changeListenerCallback (juce::ChangeBroadcaster*) override;
+    juce::Component::SafePointer<juce::ColourSelector> selector;
+};
+
 class ViewPanel : public juce::Component
 {
 public:
@@ -202,16 +221,30 @@ public:
     void mouseDown (const juce::MouseEvent& e) override { if (! box.contains (e.position)) setVisible (false); }
     void setStyle (const ViewStyle&);
     ViewStyle getStyle() const;
+    void setSettings (juce::PropertiesFile*);
+    void refreshPresets();
+    void savePreset (const juce::String& name);
     std::function<void (const ViewStyle&)> onChange;
+    std::function<void()> onPresetsChanged;
 
 private:
     void changed();
+    void selectMatchingPreset();
+    void askPresetName();
     struct Row { const char* label; juce::Component* comp = nullptr; };
-    juce::ComboBox cbMode, cbRange, cbLine, cbFill, cbGrid, cbTheme, cbMeter, cbMeterRange, cbHold, cbLayout, cbSpecColor, cbSurface;
-    juce::TextButton btnGlow, btnPeaks, btnDefaults, btnClose;
-    std::vector<Row> left, right;
+    juce::ComboBox cbMode, cbSpecColor, cbRange, cbLine, cbFill, cbGrid, cbTheme, cbSurface, cbAccent,
+                   cbMeter, cbMeterRange, cbHold, cbPreset;
+    juce::TextButton btnGlow, btnPeaks, btnShowTonal, btnShowHist, btnShowLoud, btnShowMeter,
+                     btnSave, btnDelete, btnDefaults, btnClose;
+    std::array<ColourSwatch, 4> swatches;
+    juce::Component swatchRow, presetBtnRow;
+    std::array<std::vector<Row>, 3> cols;
     std::vector<std::pair<juce::String, juce::Rectangle<float>>> labels, headers;
     juce::Rectangle<float> box;
+    ViewStyle current;
+    ViewPresets::List presetList;
+    int numBuiltIn = 0;
+    juce::PropertiesFile* settings = nullptr;
     bool loading = false;
 };
 
@@ -240,6 +273,8 @@ public:
     juce::String buildReport() const;
     void applyStyle (const ViewStyle&, bool save);
     void showView (bool s);
+    void refreshQuickPresets();
+    juce::Colour accent (juce::Colour def) const;
     const ViewStyle& getStyle() const noexcept { return style; }
 
 private:
@@ -267,6 +302,8 @@ private:
     ViewPanel viewPanel;
     ViewStyle style;
 
+    juce::TextButton btnQCurve, btnQBars, btnQSpectro, btnQColor;
+    juce::ComboBox cbQuickPreset;
     juce::TextButton btnView, btnSimple, btnPro, btnA, btnB, btnReset, btnHelp, btnAuto, btnReport;
     juce::TextButton btnTabHist, btnTabScope;
     juce::ComboBox cbTarget, cbSlope, cbSpeed, cbSmooth, cbRes, cbChannel, cbMonitor, cbBand;
