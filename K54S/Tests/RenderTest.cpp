@@ -571,8 +571,21 @@ int main (int argc, char** argv)
             allOk &= check ("Talkbox Fahrt", out) && i > u * 1.5;
             writeWav (outDir.getChildFile ("keys_talkbox_sweep.wav"), out, sr);
         }
+        // Hoerproben Orgeln: Kadenz C - F - G - C mit Pedal, 9 s inkl. Hall
+        for (auto* pn : { "Notre-Dame Flute harmonique", "Notre-Dame Paris Plenum", "Notre-Dame Grand Choeur Chamades", "Freiberg Plenum", "Freiberg Tutti mit Zungen" })
+        {
+            proc.setCurrentProgram (presetIndex (pn));
+            proc.prepareToPlay (sr, block);
+            std::vector<Ev> ev;
+            const int chords[4][4] { { 36, 60, 64, 67 }, { 41, 60, 65, 69 }, { 43, 62, 67, 71 }, { 36, 60, 64, 72 } };
+            for (int k = 0; k < 4; ++k)
+                for (int n : chords[k]) { ev.push_back ({ at (0.05 + k * 1.6), n, true, 0.9f }); ev.push_back ({ at (0.05 + k * 1.6 + (k == 3 ? 2.6 : 1.55)), n, false, 0.0f }); }
+            auto out = render (proc, sr, block, 9.5, ev);
+            allOk &= check (juce::String ("Hoerprobe ") + pn, out);
+            writeWav (outDir.getChildFile ("Orgel_" + juce::File::createLegalFileName (juce::String (pn).replace (" ", "_")) + ".wav"), out, sr);
+        }
         // CPU: Kathedrale Tutti, 10 Toene + Leslie-Orgel + Clav, je 10 s
-        for (auto* pn : { "Passau Dom Tutti", "Gospel Leslie", "Funk Clav 72", "FM Ballade Piano", "Tines + Pad" })
+        for (auto* pn : { "Notre-Dame Grand Choeur Chamades", "Freiberg Tutti mit Zungen", "Passau Dom Tutti", "Gospel Leslie", "Funk Clav 72", "FM Ballade Piano", "Tines + Pad" })
         {
             proc.setCurrentProgram (presetIndex (pn));
             proc.prepareToPlay (sr, block);

@@ -56,7 +56,8 @@ namespace KeysTables
         }
     };
 
-    enum Kind { Principal = 0, StoppedFlute, OpenFlute, String, Reed, Clarinet, Tibia, Sine, NumKinds };
+    enum Kind { Principal = 0, StoppedFlute, OpenFlute, String, Reed, Clarinet, Tibia, Sine,
+                Quintadena, HarmonicFlute, FrenchReed, Chamade, Oboe, VoxHumana, NumKinds };
 
     inline float amp (int kind, int n) noexcept
     {
@@ -74,6 +75,35 @@ namespace KeysTables
             }
             case Clarinet:     return (n % 2 == 1 ? 1.0f / fn : 0.08f / fn) * (n > 30 ? 0.0f : 1.0f);
             case Tibia:        return n == 1 ? 1.0f : (n == 2 ? 0.05f : (n == 3 ? 0.06f : 0.0f));
+            // gedeckt, ueberblasend in die Duodezime: starke 3. Harmonische
+            case Quintadena:   return n == 1 ? 1.0f : (n == 3 ? 0.72f : (n == 5 ? 0.16f : (n == 2 ? 0.05f : (n % 2 == 1 && n < 12 ? 0.04f : 0.0f))));
+            // Flute harmonique (Cavaille-Coll): voller Grundton, weiche Oktave
+            case HarmonicFlute:return n == 1 ? 1.0f : (n == 2 ? 0.26f : (n == 3 ? 0.09f : (n == 4 ? 0.035f : (n == 5 ? 0.015f : 0.0f))));
+            // franzoesische Zunge (Trompette/Bombarde): heller, Obertoene bis weit oben
+            case FrenchReed:
+            {
+                const float form = 1.0f + 2.2f * std::exp (-0.5f * std::pow ((fn - 12.0f) / 5.0f, 2.0f));
+                return form / std::pow (fn, 0.45f) * (n > 80 ? 0.0f : 1.0f);
+            }
+            // Chamade (waagerechte Trompete): noch heller und lauter
+            case Chamade:
+            {
+                const float form = 1.0f + 3.0f * std::exp (-0.5f * std::pow ((fn - 15.0f) / 6.0f, 2.0f));
+                return form / std::pow (fn, 0.32f) * (n > 96 ? 0.0f : 1.0f);
+            }
+            // Hautbois: duenner Grundton, naselnder Formant
+            case Oboe:
+            {
+                const float form = 0.35f + 2.4f * std::exp (-0.5f * std::pow ((fn - 5.0f) / 2.0f, 2.0f));
+                return form / std::pow (fn, 0.85f) * (n > 40 ? 0.0f : 1.0f);
+            }
+            // Vox humana: kurze Becher, schwacher Grundton, ungerade Obertoene
+            case VoxHumana:
+            {
+                if (n == 1) return 0.3f;
+                const float form = 1.0f + 1.8f * std::exp (-0.5f * std::pow ((fn - 4.0f) / 1.8f, 2.0f));
+                return form * (n % 2 == 1 ? 1.0f : 0.45f) / std::pow (fn, 0.9f) * (n > 30 ? 0.0f : 1.0f);
+            }
             default:           return n == 1 ? 1.0f : 0.0f;
         }
     }
@@ -134,12 +164,16 @@ namespace KeysTables
 namespace PipeOrgan
 {
     enum Stop { Bourdon16 = 0, Prinzipal8, Floete8, Gambe8, Oktave4, Floete4, Quinte, Superoktave2, Mixtur, Cymbel,
-                Trompete8, Bombarde16, Tuba8, Tibia8, VoxCeleste8, Krummhorn8, NumStops };
+                Trompete8, Bombarde16, Tuba8, Tibia8, VoxCeleste8, Krummhorn8,
+                // 1.3: Register nach echten Dispositionen (Freiberg, Notre-Dame)
+                Gedackt8, Nasat, Terz, Cornet, Quintadena16, Quintadena8, VoxHumana8, Posaune16, Clarin4, Principal16,
+                FluteHarm8, Trompette8, Clairon4, BombardeFr16, Chamade8, Chamade4, PleinJeu, Hautbois8, Larigot, Septieme,
+                MixturIV, NumStops };
 
     struct StopDef
     {
         int kind;
-        float ratios[4];
+        float ratios[6];
         int numRanks;
         float gain;
         float speed;          // Ansprache (Anteil pro ms, groesser = schneller)
@@ -166,6 +200,27 @@ namespace PipeOrgan
             { Tibia,        { 1.0f },               1, 0.80f, 0.030f, false },  // Tibia 8' (Theater)
             { String,       { 1.0f, 1.0035f },      2, 0.30f, 0.020f, false },  // Vox Celeste 8' (schwebend)
             { Clarinet,     { 1.0f },               1, 0.40f, 0.090f, true  },  // Krummhorn 8'
+            { StoppedFlute, { 1.0f },               1, 0.60f, 0.040f, false },  // Gedackt / Rohrfloete 8'
+            { OpenFlute,    { 3.0f },               1, 0.28f, 0.045f, false },  // Nasat 2 2/3'
+            { Principal,    { 5.0f },               1, 0.22f, 0.060f, false },  // Terz 1 3/5'
+            { OpenFlute,    { 1.0f, 2.0f, 3.0f, 4.0f, 5.0f }, 5, 0.24f, 0.050f, false },  // Cornet V
+            { Quintadena,   { 0.5f },               1, 0.50f, 0.030f, false },  // Quintadena 16'
+            { Quintadena,   { 1.0f },               1, 0.45f, 0.035f, false },  // Quintadena 8'
+            { VoxHumana,    { 1.0f },               1, 0.36f, 0.120f, true  },  // Vox humana 8'
+            { Reed,         { 0.5f },               1, 0.48f, 0.080f, true  },  // Posaune 16'
+            { Reed,         { 2.0f },               1, 0.34f, 0.120f, true  },  // Clarin 4'
+            { Principal,    { 0.5f },               1, 0.46f, 0.030f, false },  // Principal 16'
+            { HarmonicFlute,{ 1.0f },               1, 0.68f, 0.035f, false },  // Flute harmonique 8'
+            { FrenchReed,   { 1.0f },               1, 0.44f, 0.120f, true  },  // Trompette 8'
+            { FrenchReed,   { 2.0f },               1, 0.34f, 0.130f, true  },  // Clairon 4'
+            { FrenchReed,   { 0.5f },               1, 0.46f, 0.100f, true  },  // Bombarde 16' (franzoesisch)
+            { Chamade,      { 1.0f },               1, 0.50f, 0.140f, true  },  // Trompette en chamade 8'
+            { Chamade,      { 2.0f },               1, 0.38f, 0.150f, true  },  // Clairon en chamade 4'
+            { Principal,    { 4.0f, 6.0f, 8.0f, 12.0f, 16.0f }, 5, 0.17f, 0.070f, false },  // Plein-Jeu V
+            { Oboe,         { 1.0f },               1, 0.34f, 0.110f, true  },  // Hautbois 8'
+            { Principal,    { 6.0f },               1, 0.20f, 0.065f, false },  // Larigot 1 1/3'
+            { OpenFlute,    { 7.0f },               1, 0.16f, 0.065f, false },  // Septieme 1 1/7'
+            { Principal,    { 4.0f, 6.0f, 8.0f, 12.0f }, 4, 0.19f, 0.070f, false },  // Mixtur IV 2'
         };
         return defs[juce::jlimit (0, NumStops - 1, s)];
     }
@@ -175,15 +230,24 @@ namespace PipeOrgan
         std::vector<int> crescendo;   // Register in der Reihenfolge der Walze
         float chiff, wind, bright, detune, reedPower, tremRate, tremDepth;
         bool  pedal32, wellTempered;
+        int   temperament = 0;      // 0 gleichstufig, 1 Werckmeister III, 2 Silbermann (1/6-Komma-mitteltoenig)
+        float pedalReed = 0.0f;     // Zungen im Pedal beim Tutti (Notre-Dame: Contre-Bombarde 32')
+        float pedalReedRatio = 0.5f;
     };
 
     inline const World& world (int w)
     {
         static const std::vector<World> worlds {
             // Paris Notre-Dame – franzoesisch-symphonisch, maechtige Zungen
-            { { Floete8, Prinzipal8, Gambe8, Bourdon16, Oktave4, Floete4, Trompete8, Superoktave2, Mixtur, Bombarde16 }, 0.10f, 0.15f, 0.10f, 0.6f, 1.35f, 0, 0, true,  false },
+            // nach der Disposition (Cavaille-Coll/Cochereau, 115 Register, gleichstufig): Flute harmonique, Montre, Prestant,
+            // Doublette, Plein-Jeu, dann Trompette/Clairon/Bombarde, Cornet und zuletzt die Chamaden; Pedal 32' mit Contre-Bombarde
+            { { FluteHarm8, Gedackt8, Prinzipal8, Oktave4, Bourdon16, Superoktave2, PleinJeu, Trompette8, Clairon4, BombardeFr16, Cornet, Chamade8, Chamade4 },
+              0.06f, 0.12f, 0.12f, 0.5f, 1.35f, 0, 0, true, false, 0, 0.55f, 0.25f },
             // Freiberg Silbermann – saechsischer Barock, hell, deutliche Ansprache
-            { { Floete8, Prinzipal8, Oktave4, Floete4, Quinte, Superoktave2, Mixtur, Cymbel, Bourdon16, Trompete8 },   0.55f, 0.25f, 0.35f, 0.9f, 0.80f, 0, 0, false, true  },
+            // nach der Disposition des Domes (Silbermann 1710-14): Rohrfloete, Principal 8, Octave 4, Quinte 3', Octave 2,
+            // Terz, Mixtur IV, Cimbel III, Bordun 16, Trompete 8, Clarin 4, Cornet; Pedal Untersatz 32' + Posaune 16'
+            { { Gedackt8, Prinzipal8, Oktave4, Quinte, Superoktave2, Terz, MixturIV, Cymbel, Bourdon16, Trompete8, Clarin4, Cornet },
+              0.55f, 0.25f, 0.30f, 0.9f, 0.85f, 0, 0, true, false, 2, 0.45f, 0.5f },
             // Leipzig Bach-Barock
             { { Prinzipal8, Floete8, Oktave4, Quinte, Superoktave2, Mixtur, Krummhorn8, Bourdon16, Trompete8, Cymbel }, 0.45f, 0.22f, 0.28f, 0.8f, 0.85f, 0, 0, false, true  },
             // Passau Dom – riesig, viele Farben
@@ -212,6 +276,13 @@ namespace PipeOrgan
             { { Floete8, Prinzipal8, Floete4, Oktave4, Superoktave2, Mixtur },                                            0.35f, 0.38f, 0.00f, 2.2f, 0.0f, 0, 0, false, false },
         };
         return worlds[(size_t) juce::jlimit (0, (int) worlds.size() - 1, w)];
+    }
+
+    /** Silbermann: 1/6-Komma-mitteltoenig (Quinten 698,37 Cent), Abweichung von gleichstufig in Cent, A = 0 */
+    inline float silbermannCents (int note) noexcept
+    {
+        static const float c[12] { 4.89f, -6.52f, 1.63f, 9.78f, -1.63f, 6.52f, -4.89f, 3.26f, -8.15f, 0.0f, 8.15f, -3.26f };
+        return c[((note % 12) + 12) % 12];
     }
 
     /** Werckmeister III, Abweichung von gleichstufig in Cent (A = 0) */
@@ -573,7 +644,8 @@ private:
             trem = 1.0f + w.tremDepth * 0.6f * sv;
             pitchCents += sv * w.tremDepth * 14.0f;
         }
-        if (w.wellTempered) pitchCents += PipeOrgan::wellTemperedCents (pitchNote);
+        if (w.wellTempered || w.temperament == 1) pitchCents += PipeOrgan::wellTemperedCents (pitchNote);
+        else if (w.temperament == 2)         pitchCents += PipeOrgan::silbermannCents (pitchNote);
         const double f0 = hz * std::exp2 (pitchCents / 1200.0);
         const float gateT = gate ? 1.0f : 0.0f;
         const float relSpeed = 0.0016f * (1.4f - p.decay);
@@ -604,16 +676,27 @@ private:
         {
             const float g = kb.stopGain[st];
             const auto& sd = PipeOrgan::stop (st);
+            if (g <= 1.0e-4f)
+            {
+                // Register nicht gezogen und ausgeklungen: ganz ueberspringen (spart Rechenzeit)
+                bool idle = true;
+                for (int k = 0; k < sd.numRanks && r + k < maxRanks; ++k) idle = idle && rankEnv[r + k] <= 1.0e-4f;
+                if (idle) { for (int k = 0; k < sd.numRanks && r < maxRanks; ++k) rankEnv[r++] = 0.0f; continue; }
+            }
+            const float det = (float) ((rankDet (st) - 0.5f) * w.detune);
             for (int k = 0; k < sd.numRanks; ++k)
-                addRank (sd.kind, sd.ratios[k], g, sd.speed, (k > 0 ? 0.0f : (float) ((rankDet (st) - 0.5f) * w.detune)));
+                addRank (sd.kind, sd.ratios[k], g, sd.speed, k > 0 ? 0.0f : det);
         }
         // Pedal: unter C2 automatisch 16' (und 32' in grossen Kathedralen)
         if (pitchNote < 48)
         {
             const float pedal = juce::jlimit (0.0f, 1.0f, (48.0f - (float) pitchNote) / 6.0f);
             addRank (KeysTables::StoppedFlute, 0.5, 0.45f * pedal, 0.02f, 0.0f);
-            if (w.pedal32 && kb.registerAmt > 0.45f)
-                addRank (KeysTables::StoppedFlute, 0.25, 0.4f * pedal * juce::jlimit (0.0f, 1.0f, (kb.registerAmt - 0.45f) * 4.0f), 0.012f, 0.0f);
+            const float g32 = w.pedal32 ? juce::jlimit (0.0f, 1.0f, (kb.registerAmt - 0.45f) * 4.0f) : 0.0f;
+            addRank (KeysTables::StoppedFlute, 0.25, 0.4f * pedal * g32, 0.012f, 0.0f);
+            // Pedalzunge im Tutti (Notre-Dame: Contre-Bombarde 32', Freiberg: Posaune 16')
+            const float gR = w.pedalReed * juce::jlimit (0.0f, 1.0f, (kb.registerAmt - 0.7f) * 4.0f) * w.reedPower;
+            addRank (w.temperament == 2 ? KeysTables::Reed : KeysTables::FrenchReed, w.pedalReedRatio, gR * pedal, 0.06f, 0.0f);
         }
         // Chiff (Ansprache-Geraeusch) und Windrauschen
         const float chiffAmt = w.chiff * (0.4f + 1.2f * p.b);
@@ -722,7 +805,7 @@ private:
         return y * relGain;
     }
 
-    static constexpr int maxRanks = 40;
+    static constexpr int maxRanks = 72;
     double sr = 44100.0, t = 0.0;
     double phases[maxRanks] {};
     float rankEnv[maxRanks] {};
@@ -956,7 +1039,7 @@ private:
                     kb.stopGain[st] = g;
                     sum += g * (float) sd.numRanks;
                 }
-                kb.organNorm = 0.75f / std::sqrt (juce::jmax (0.6f, sum));
+                kb.organNorm = 0.38f / std::sqrt (juce::jmax (0.6f, sum));
                 kb.tremPhase = (float) tremPhase;
                 kb.tremInc = w.tremRate / sr;
                 tremPhase = std::fmod (tremPhase + w.tremRate * n / sr, 1.0);

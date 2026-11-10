@@ -348,6 +348,10 @@ const std::vector<FactoryPreset>& getFactoryPresets()
                   { RVS, 0.55f }, { RVZ, 0.97f }, { RVD, 0.3f }, { RVL, 1.1f }, { KL, -3.0f }
         { "Notre-Dame Paris Plenum", "Kirchenorgeln der Welt", { PIPE_BASE, { KV, 0 }, { KA, 0.85f } } },
         { "Kathedrale Crescendo (Mod-Rad)", "Kirchenorgeln der Welt", { PIPE_BASE, { KV, 0 }, { KA, 0.3f }, { KW, KW_REG } } },
+        { "Notre-Dame Grand Choeur Chamades", "Kirchenorgeln der Welt", { PIPE_BASE, { KV, 0 }, { KA, 1.0f }, { KL, -2.0f }, { RVS, 0.6f } } },
+        { "Notre-Dame Flute harmonique", "Kirchenorgeln der Welt", { PIPE_BASE, { KV, 0 }, { KA, 0.0f }, { KT, 0.45f } } },
+        { "Freiberg Plenum", "Kirchenorgeln der Welt", { PIPE_BASE, { KV, 1 }, { KA, 0.62f }, { KB, 0.5f } } },
+        { "Freiberg Tutti mit Zungen", "Kirchenorgeln der Welt", { PIPE_BASE, { KV, 1 }, { KA, 1.0f }, { KB, 0.5f }, { KL, -3.5f } } },
         { "Freiberg Silbermann", "Kirchenorgeln der Welt", { PIPE_BASE, { KV, 1 }, { KA, 0.75f }, { KB, 0.5f } } },
         { "Leipzig Bach-Choral", "Kirchenorgeln der Welt", { PIPE_BASE, { KV, 2 }, { KA, 0.45f } } },
         { "Passau Dom Tutti", "Kirchenorgeln der Welt", { PIPE_BASE, { KV, 3 }, { KA, 1.0f }, { KL, -5.0f } } },
