@@ -113,6 +113,7 @@ target_link_libraries(K55
         juce::juce_audio_utils
         juce::juce_dsp
         juce::juce_audio_formats
+        juce::juce_cryptography
     PUBLIC
         juce::juce_recommended_config_flags
         juce::juce_recommended_lto_flags
@@ -125,5 +126,5 @@ if(K55_BUILD_TESTS)
     target_include_directories(K55Test PRIVATE Source)
     target_compile_definitions(K55Test PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0
         JUCE_STANDALONE_APPLICATION=1 JUCE_MODAL_LOOPS_PERMITTED=1 JucePlugin_Name="K-54 S")
-    target_link_libraries(K55Test PRIVATE K55 K55Assets juce::juce_audio_utils juce::juce_dsp juce::juce_audio_formats)
+    target_link_libraries(K55Test PRIVATE K55 K55Assets juce::juce_audio_utils juce::juce_dsp juce::juce_audio_formats juce::juce_cryptography)
 endif()

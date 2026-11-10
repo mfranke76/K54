@@ -5,7 +5,12 @@ Neu in 1.4.0 – ANSICHT, so wie du es brauchst:
 - Farbige Oberfläche: jede Sektion mit eigener Akzentfarbe, Regenbogenlinie unter dem Kopf – oder schlicht wie bisher
 - Schnellumschalter FARBIG oben
 - Ansichten speichern: eigene Ansichten unter einem Namen sichern und mit einem Klick wechseln
-- Die Ansicht gilt für alle Projekte
+- Die Ansicht gilt für alle Projekte; die Stimmen-Anzeige steht jetzt unten in der Fußzeile
+
+Neu in 1.3.1 – Updates direkt im Plugin (Beta):
+- Neuer Knopf UPDATE oben rechts: wird gold, sobald es auf keller54.de eine neue Version gibt
+- Ein Klick lädt das Update (mit Prüfsumme) und startet den Installer – deine Einstellungen, Presets, Samples und DAW-Projekte bleiben erhalten
+- Gemeinsames Keller54-Konto: ist der K-54 schon verbunden, ist der K-54 S es auch
 
 Neu in 1.3.0 – Kirchenorgeln näher am Original (Beta):
 - Paris Notre-Dame nach der echten Disposition: Flûte harmonique, Montre, Prestant, Doublette, Plein-Jeu V, französische Trompette/Clairon/Bombarde, Cornet V und Trompettes en chamade; im Tutti Pedal mit 32' und Contre-Bombarde

@@ -56,6 +56,13 @@ K55Main::K55Main (K55Processor& p)
     addChildComponent (fxPanel);
     addChildComponent (keysPanel);
     keysTab.setTooltip ("KEYS-Ebene: Funk Clav, Tine Piano, Tonewheel + Leslie, Kirchenorgeln der Welt, FM, Blues Harp - und Talkbox");
+    // UPDATE-Knopf (rechts in der Reiterzeile) + Update-Fenster
+    addAndMakeVisible (updateButton);
+    updateButton.setTooltip ("Neue Version von keller54.de laden - deine Einstellungen, Presets und Samples bleiben erhalten");
+    updateButton.onClick = [this] { updatePanel.setVisible (true); updatePanel.toFront (true); };
+    updatePanel.onClose = [this] { updatePanel.setVisible (false); };
+    addChildComponent (updatePanel);
+    updater->checkNow (false);   // leise im Hintergrund, hoechstens alle 6 Stunden
     addAndMakeVisible (pitchWheel);
     addAndMakeVisible (modWheel);
     pitchWheel.setTooltip ("Pitch-Wheel (folgt deinem Keyboard, mit der Maus ziehbar)");
@@ -271,9 +278,11 @@ void K55Main::resized()
         harmButton.setBounds (x + 8, headerH + 10, 130, 24);
     }
     sizeBox.setBounds (W - 14 - 90, headerH + 10, 90, 24);
-    colorButton.setBounds (W - 14 - 90 - 8 - 72, headerH + 10, 72, 24);
-    viewButton.setBounds (colorButton.getX() - 6 - 84, headerH + 10, 84, 24);
-    statusArea = { harmButton.getRight() + 8, headerH + 10, viewButton.getX() - 8 - harmButton.getRight() - 8, 24 };
+    updateButton.setBounds (W - 14 - 90 - 8 - 130, headerH + 10, 130, 24);
+    viewButton.setBounds (harmButton.getRight() + 8, headerH + 10, 84, 24);
+    colorButton.setBounds (viewButton.getRight() + 6, headerH + 10, 72, 24);
+    statusArea = { 330, H - footerH, 280, footerH };   // VOICES jetzt in der Fusszeile
+    updatePanel.setBounds (getLocalBounds());
     if (viewPanel != nullptr) viewPanel->setBounds (getLocalBounds());
 
     const int top = headerH + 12 + tabH, bodyH = H - headerH - tabH - keyboardH - footerH - 24;
@@ -637,6 +646,19 @@ void K55Main::timerCallback()
     const int v = proc.voicesActive.load();
     const bool pl = proc.isPianoLoading();
     if (v != voices || pl != pianoLoading) { voices = v; pianoLoading = pl; repaint (statusArea); }
+
+    // UPDATE-Knopf: gold, sobald eine neue Version bereitsteht
+    {
+        const auto st = updater->get();
+        const juce::String label = st.updateAvailable ? "UPDATE " + st.latest : juce::String ("UPDATE");
+        if (label != lastUpdateLabel)
+        {
+            lastUpdateLabel = label;
+            updateButton.setButtonText (label);
+            updateButton.setClickingTogglesState (false);
+            updateButton.setToggleState (st.updateAvailable, juce::dontSendNotification);
+        }
+    }
 
     // Table / Pos nur aktiv, wenn der Oszillator auf WAVETABLE steht (nur bei Aenderung anfassen)
     for (int i = 0; i < 3; ++i)
