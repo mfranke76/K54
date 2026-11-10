@@ -3,6 +3,10 @@ K-54 S · Keller54 · by Frank E. – BETA
 Neu in 1.3.0 – Kirchenorgeln näher am Original (Beta):
 - Paris Notre-Dame nach der echten Disposition: Flûte harmonique, Montre, Prestant, Doublette, Plein-Jeu V, französische Trompette/Clairon/Bombarde, Cornet V und Trompettes en chamade; im Tutti Pedal mit 32' und Contre-Bombarde
 - Freiberg Dom nach Silbermanns Disposition (1710–14): Rohrflöte, Principal, Octave, Quinte 3', Terz, Mixtur IV, Cimbel III, Trompete und Clarin, Cornet; Pedal mit Untersatz 32' und Posaune 16'; Silbermann-Stimmung (1/6-Komma mitteltönig)
+- Leipzig nach der Bach-Orgel der Thomaskirche (Rohrflöte, Gambe, Nassat, Sesquialtera, Mixtur, Trombetta, Posaune 32'), ungleichstufige Stimmung
+- Passau (fünf Orgeln in einer): süddeutsche Hauptorgel plus französische Zungen der Evangelienorgel
+- Köln Dom mit den Hochdruck-Tuben der Querhausorgel und Contraposaune 32'
+- Hamburg Michel nach der Steinmeyer-Orgel: Krummhorn, Hautbois, Clairon, Bombarde, Posaune 32'
 - Neue Pfeifenarten: Quintadena, Flûte harmonique, französische Zungen, Chamaden, Hautbois, Vox humana
 - Neue Presets: Notre-Dame Grand Choeur Chamades, Notre-Dame Flute harmonique, Freiberg Plenum, Freiberg Tutti mit Zungen
 - Orgel-Lautstärke angepasst (mehr Reserve bei vollen Akkorden), weniger Rechenlast bei ungezogenen Registern

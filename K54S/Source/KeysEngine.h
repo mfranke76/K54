@@ -233,6 +233,7 @@ namespace PipeOrgan
         int   temperament = 0;      // 0 gleichstufig, 1 Werckmeister III, 2 Silbermann (1/6-Komma-mitteltoenig)
         float pedalReed = 0.0f;     // Zungen im Pedal beim Tutti (Notre-Dame: Contre-Bombarde 32')
         float pedalReedRatio = 0.5f;
+        int   pedalReedKind = 4;    // KeysTables::Reed (deutsch); FrenchReed fuer franzoesische Orgeln
     };
 
     inline const World& world (int w)
@@ -242,18 +243,27 @@ namespace PipeOrgan
             // nach der Disposition (Cavaille-Coll/Cochereau, 115 Register, gleichstufig): Flute harmonique, Montre, Prestant,
             // Doublette, Plein-Jeu, dann Trompette/Clairon/Bombarde, Cornet und zuletzt die Chamaden; Pedal 32' mit Contre-Bombarde
             { { FluteHarm8, Gedackt8, Prinzipal8, Oktave4, Bourdon16, Superoktave2, PleinJeu, Trompette8, Clairon4, BombardeFr16, Cornet, Chamade8, Chamade4 },
-              0.06f, 0.12f, 0.12f, 0.5f, 1.35f, 0, 0, true, false, 0, 0.55f, 0.25f },
+              0.06f, 0.12f, 0.12f, 0.5f, 1.35f, 0, 0, true, false, 0, 0.55f, 0.25f, KeysTables::FrenchReed },
             // Freiberg Silbermann – saechsischer Barock, hell, deutliche Ansprache
             // nach der Disposition des Domes (Silbermann 1710-14): Rohrfloete, Principal 8, Octave 4, Quinte 3', Octave 2,
             // Terz, Mixtur IV, Cimbel III, Bordun 16, Trompete 8, Clarin 4, Cornet; Pedal Untersatz 32' + Posaune 16'
             { { Gedackt8, Prinzipal8, Oktave4, Quinte, Superoktave2, Terz, MixturIV, Cymbel, Bourdon16, Trompete8, Clarin4, Cornet },
               0.55f, 0.25f, 0.30f, 0.9f, 0.85f, 0, 0, true, false, 2, 0.45f, 0.5f },
             // Leipzig Bach-Barock
-            { { Prinzipal8, Floete8, Oktave4, Quinte, Superoktave2, Mixtur, Krummhorn8, Bourdon16, Trompete8, Cymbel }, 0.45f, 0.22f, 0.28f, 0.8f, 0.85f, 0, 0, false, true  },
+            // Bach-Orgel der Thomaskirche (Disposition nach der Bach-Zeit): Rohrfloete, Principal, Viola da gamba, Octav,
+            // Nassatquint, Superoctav, Sesquialtera (Nasat+Terz), Mixtur, Cimbel, Bordun 16, Trombetta; Pedal Untersatz + Posaune 32'
+            { { Gedackt8, Prinzipal8, Gambe8, Oktave4, Nasat, Superoktave2, Terz, MixturIV, Cymbel, Bourdon16, Trompete8, Quintadena16 },
+              0.45f, 0.22f, 0.28f, 0.8f, 0.85f, 0, 0, true, true, 1, 0.45f, 0.25f },
             // Passau Dom – riesig, viele Farben
-            { { Floete8, Prinzipal8, Gambe8, Oktave4, Bourdon16, Floete4, Superoktave2, Mixtur, Trompete8, Tuba8, Bombarde16, Cymbel }, 0.18f, 0.12f, 0.12f, 0.7f, 1.1f, 0, 0, true, false },
+            // Passau: fuenf Orgeln in einer (233 Register) - sueddeutsche Hauptorgel, franzoesisch-romantische Evangelienorgel,
+            // Fernwerk; Walze von Floete/Streichern ueber Prinzipalchor bis zu deutschen und franzoesischen Zungen
+            { { Floete8, Prinzipal8, Gambe8, VoxCeleste8, Oktave4, Bourdon16, Floete4, Superoktave2, Mixtur, Cymbel, Trompete8, Trompette8, Bombarde16, Tuba8 },
+              0.18f, 0.12f, 0.12f, 0.7f, 1.1f, 0, 0, true, false, 0, 0.45f, 0.5f },
             // Koeln Dom
-            { { Prinzipal8, Floete8, Bourdon16, Oktave4, Gambe8, Superoktave2, Mixtur, Trompete8, Bombarde16, Tuba8 },   0.15f, 0.10f, 0.05f, 0.6f, 1.15f, 0, 0, true,  false },
+            // Koeln: Querhausorgel (Klais 1948) mit Hochdruck-Tuben (Tuba magna 16', Tuba mirabilis 8'), Vox coelestis,
+            // Principalbass 32' und Contraposaune 32' im Pedal
+            { { Floete8, Prinzipal8, Gambe8, VoxCeleste8, Oktave4, Bourdon16, Principal16, Superoktave2, Mixtur, Trompete8, Hautbois8, Tuba8, Bombarde16 },
+              0.12f, 0.10f, 0.05f, 0.6f, 1.25f, 0, 0, true, false, 0, 0.6f, 0.25f },
             // Ulm Muenster – deutsche Romantik, Streicher und Schwebung
             { { Floete8, Gambe8, VoxCeleste8, Prinzipal8, Bourdon16, Oktave4, Floete4, Mixtur, Trompete8, Bombarde16 }, 0.08f, 0.12f, 0.00f, 0.6f, 1.0f, 0, 0, true,  false },
             // Rom St. Peter – italienisches Ripieno, sanfte Prinzipale, keine Zungen
@@ -265,7 +275,10 @@ namespace PipeOrgan
             // Wien Stephansdom
             { { Floete8, Prinzipal8, Gambe8, Oktave4, Bourdon16, Superoktave2, Mixtur, Trompete8, Bombarde16, Cymbel },   0.15f, 0.12f, 0.12f, 0.6f, 1.1f, 0, 0, true,  false },
             // Hamburg Michel
-            { { Floete8, Prinzipal8, Gambe8, VoxCeleste8, Oktave4, Bourdon16, Superoktave2, Mixtur, Trompete8, Tuba8, Bombarde16 }, 0.12f, 0.10f, 0.08f, 0.6f, 1.15f, 0, 0, true, false },
+            // Hamburg Michel: Steinmeyer 1962 (85 Register, V/P) - Prinzipalchor, Krummhorn, Hautbois, Clairon,
+            // Bombarde 16'; Pedal Prinzipal 32' und Posaune 32'
+            { { Gedackt8, Prinzipal8, Oktave4, Floete4, Superoktave2, Quinte, Mixtur, Krummhorn8, Cymbel, Bourdon16, Trompete8, Hautbois8, Clarin4, Bombarde16 },
+              0.20f, 0.10f, 0.15f, 0.6f, 1.15f, 0, 0, true, false, 0, 0.5f, 0.25f },
             // Riga Dom – romantische Walcker-Orgel, warm
             { { Floete8, Gambe8, VoxCeleste8, Prinzipal8, Floete4, Bourdon16, Oktave4, Mixtur, Trompete8, Tuba8 },       0.06f, 0.10f, -0.10f, 0.6f, 1.0f, 0, 0, true, false },
             // Philadelphia Wanamaker – riesige Konzertorgel, Streicher-Chor
@@ -696,7 +709,7 @@ private:
             addRank (KeysTables::StoppedFlute, 0.25, 0.4f * pedal * g32, 0.012f, 0.0f);
             // Pedalzunge im Tutti (Notre-Dame: Contre-Bombarde 32', Freiberg: Posaune 16')
             const float gR = w.pedalReed * juce::jlimit (0.0f, 1.0f, (kb.registerAmt - 0.7f) * 4.0f) * w.reedPower;
-            addRank (w.temperament == 2 ? KeysTables::Reed : KeysTables::FrenchReed, w.pedalReedRatio, gR * pedal, 0.06f, 0.0f);
+            addRank (w.pedalReedKind, w.pedalReedRatio, gR * pedal, 0.06f, 0.0f);
         }
         // Chiff (Ansprache-Geraeusch) und Windrauschen
         const float chiffAmt = w.chiff * (0.4f + 1.2f * p.b);
