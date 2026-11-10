@@ -1,5 +1,10 @@
 K-54 S · Keller54 · by Frank E. – BETA
 
+Neu in 1.3.1 – Updates direkt im Plugin (Beta):
+- Neuer Knopf UPDATE oben rechts: wird gold, sobald es auf keller54.de eine neue Version gibt
+- Ein Klick lädt das Update (mit Prüfsumme) und startet den Installer – deine Einstellungen, Presets, Samples und DAW-Projekte bleiben erhalten
+- Gemeinsames Keller54-Konto: ist der K-54 schon verbunden, ist der K-54 S es auch
+
 Neu in 1.3.0 – Kirchenorgeln näher am Original (Beta):
 - Paris Notre-Dame nach der echten Disposition: Flûte harmonique, Montre, Prestant, Doublette, Plein-Jeu V, französische Trompette/Clairon/Bombarde, Cornet V und Trompettes en chamade; im Tutti Pedal mit 32' und Contre-Bombarde
 - Freiberg Dom nach Silbermanns Disposition (1710–14): Rohrflöte, Principal, Octave, Quinte 3', Terz, Mixtur IV, Cimbel III, Trompete und Clarin, Cornet; Pedal mit Untersatz 32' und Posaune 16'; Silbermann-Stimmung (1/6-Komma mitteltönig)

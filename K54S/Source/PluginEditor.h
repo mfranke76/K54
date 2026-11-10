@@ -6,6 +6,7 @@
 #include "SamplePanel.h"
 #include "HarmonyPanel.h"
 #include "KeysPanel.h"
+#include "UpdatePanel.h"
 
 // ---------------------------------------------------------------------------
 //  Main-Ausgangspegel neben dem Logo (Stereo, Peak-Hold, Clip-Anzeige)
@@ -213,6 +214,10 @@ private:
     SamplePanel samplePanel;
     FxPanel fxPanel;
     KeysPanel keysPanel;
+    juce::SharedResourcePointer<K54SUpdater> updater;
+    juce::TextButton updateButton { "UPDATE" };
+    UpdatePanel updatePanel { *updater };
+    juce::String lastUpdateLabel;
     int currentPage = 0, voices = 0;
     bool pianoLoading = false;
     int lastWave[3] { -1, -1, -1 };

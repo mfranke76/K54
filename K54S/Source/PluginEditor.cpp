@@ -56,6 +56,13 @@ K55Main::K55Main (K55Processor& p)
     addChildComponent (fxPanel);
     addChildComponent (keysPanel);
     keysTab.setTooltip ("KEYS-Ebene: Funk Clav, Tine Piano, Tonewheel + Leslie, Kirchenorgeln der Welt, FM, Blues Harp - und Talkbox");
+    // UPDATE-Knopf (rechts in der Reiterzeile) + Update-Fenster
+    addAndMakeVisible (updateButton);
+    updateButton.setTooltip ("Neue Version von keller54.de laden - deine Einstellungen, Presets und Samples bleiben erhalten");
+    updateButton.onClick = [this] { updatePanel.setVisible (true); updatePanel.toFront (true); };
+    updatePanel.onClose = [this] { updatePanel.setVisible (false); };
+    addChildComponent (updatePanel);
+    updater->checkNow (false);   // leise im Hintergrund, hoechstens alle 6 Stunden
     addAndMakeVisible (pitchWheel);
     addAndMakeVisible (modWheel);
     pitchWheel.setTooltip ("Pitch-Wheel (folgt deinem Keyboard, mit der Maus ziehbar)");
@@ -238,7 +245,9 @@ void K55Main::resized()
         harmButton.setBounds (x + 8, headerH + 10, 130, 24);
     }
     sizeBox.setBounds (W - 14 - 90, headerH + 10, 90, 24);
-    statusArea = { W - 14 - 90 - 280, headerH + 10, 270, 24 };
+    updateButton.setBounds (W - 14 - 90 - 8 - 130, headerH + 10, 130, 24);
+    statusArea = { 742, headerH + 10, W - 14 - 90 - 8 - 130 - 8 - 742, 24 };
+    updatePanel.setBounds (getLocalBounds());
 
     const int top = headerH + 12 + tabH, bodyH = H - headerH - tabH - keyboardH - footerH - 24;
     modPanel.setBounds (14, top, W - 28, bodyH);
@@ -593,6 +602,19 @@ void K55Main::timerCallback()
     const int v = proc.voicesActive.load();
     const bool pl = proc.isPianoLoading();
     if (v != voices || pl != pianoLoading) { voices = v; pianoLoading = pl; repaint (statusArea); }
+
+    // UPDATE-Knopf: gold, sobald eine neue Version bereitsteht
+    {
+        const auto st = updater->get();
+        const juce::String label = st.updateAvailable ? "UPDATE " + st.latest : juce::String ("UPDATE");
+        if (label != lastUpdateLabel)
+        {
+            lastUpdateLabel = label;
+            updateButton.setButtonText (label);
+            updateButton.setClickingTogglesState (false);
+            updateButton.setToggleState (st.updateAvailable, juce::dontSendNotification);
+        }
+    }
 
     // Table / Pos nur aktiv, wenn der Oszillator auf WAVETABLE steht (nur bei Aenderung anfassen)
     for (int i = 0; i < 3; ++i)
