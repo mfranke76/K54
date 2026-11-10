@@ -81,6 +81,7 @@ private:
     void computeDiff();
     void computeBars (const std::vector<float>& src, std::array<float, numBars>& out) const;
     void strokeCurve (juce::Graphics&, const juce::Path&, juce::Colour, float width) const;
+    void strokeCurveGrad (juce::Graphics&, const juce::Path&, const juce::ColourGradient&, float width) const;
     void drawCurves (juce::Graphics&, juce::Rectangle<float> r);
     void drawBars (juce::Graphics&, juce::Rectangle<float> r);
     void drawSpectrogram (juce::Graphics&, juce::Rectangle<float> r);
@@ -95,7 +96,7 @@ private:
 
     int gridLevel = 1;
     float lineW = 1.8f, fillA = 0.38f;
-    bool glow = true, peaks = true;
+    bool glow = true, peaks = true, rainbowCol = true;
     std::array<float, numBars> barMix {}, barRef {}, barHoldMix {};
     std::array<int, numBars> barHoldAge {};
     juce::Image sgram;
@@ -206,7 +207,7 @@ public:
 private:
     void changed();
     struct Row { const char* label; juce::Component* comp = nullptr; };
-    juce::ComboBox cbMode, cbRange, cbLine, cbFill, cbGrid, cbTheme, cbMeter, cbMeterRange, cbHold, cbLayout;
+    juce::ComboBox cbMode, cbRange, cbLine, cbFill, cbGrid, cbTheme, cbMeter, cbMeterRange, cbHold, cbLayout, cbSpecColor, cbSurface;
     juce::TextButton btnGlow, btnPeaks, btnDefaults, btnClose;
     std::vector<Row> left, right;
     std::vector<std::pair<juce::String, juce::Rectangle<float>>> labels, headers;
@@ -247,7 +248,7 @@ private:
     void setAB (bool b);
     void setParam (const char* id, float value);
     void updateVisibility();
-    void panel (juce::Graphics&, juce::Rectangle<int>, const juce::String& title) const;
+    void panel (juce::Graphics&, juce::Rectangle<int>, const juce::String& title, juce::Colour accent = col::gold) const;
 
     using BA = juce::AudioProcessorValueTreeState::ButtonAttachment;
     using CA = juce::AudioProcessorValueTreeState::ComboBoxAttachment;

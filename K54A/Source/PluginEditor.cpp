@@ -64,7 +64,8 @@ void K54Look::drawButtonBackground (juce::Graphics& g, juce::Button& b, const ju
     if (down) fill = fill.darker (0.15f);
     if (! b.isEnabled()) fill = fill.withMultipliedAlpha (0.35f);
 
-    g.setColour (fill);
+    juce::ColourGradient gloss (fill.brighter (on ? 0.25f : 0.10f), 0.0f, r.getY(), fill.darker (on ? 0.12f : 0.05f), 0.0f, r.getBottom(), false);
+    g.setGradientFill (gloss);
     g.fillRoundedRectangle (r, 4.0f);
     g.setColour (on ? accent.brighter (0.25f) : (over ? accent.withAlpha (0.6f) : col::line));
     g.drawRoundedRectangle (r, 4.0f, 1.0f);
@@ -191,14 +192,26 @@ void SpectrumView::setStyle (const ViewStyle& s)
     gridLevel = s.grid;
     glow = s.glow;
     peaks = s.peaks;
+    rainbowCol = s.specColor == 1;
 
     // Farbskala fürs Spektrogramm aus der Mix-Farbe
     const auto c = theme().mix;
     juce::ColourGradient grad (col::plot, 0.0f, 0.0f, juce::Colours::white, 1.0f, 0.0f, false);
-    grad.addColour (0.18, col::plot.interpolatedWith (c, 0.10f));
-    grad.addColour (0.45, c.darker (0.85f));
-    grad.addColour (0.72, c);
-    grad.addColour (0.90, c.brighter (0.7f));
+    if (rainbowCol)
+    {
+        grad.addColour (0.14, juce::Colour (0xff1b1060));
+        grad.addColour (0.34, juce::Colour (0xff7a1fa2));
+        grad.addColour (0.54, juce::Colour (0xffe0344a));
+        grad.addColour (0.72, juce::Colour (0xffff8a2a));
+        grad.addColour (0.88, juce::Colour (0xffffe14a));
+    }
+    else
+    {
+        grad.addColour (0.18, col::plot.interpolatedWith (c, 0.10f));
+        grad.addColour (0.45, c.darker (0.85f));
+        grad.addColour (0.72, c);
+        grad.addColour (0.90, c.brighter (0.7f));
+    }
     for (int i = 0; i < 256; ++i)
         lut[(size_t) i] = grad.getColourAtPosition ((double) i / 255.0);
 
@@ -303,6 +316,21 @@ void SpectrumView::strokeCurve (juce::Graphics& g, const juce::Path& p, juce::Co
     g.strokePath (p, juce::PathStrokeType (width, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
 }
 
+void SpectrumView::strokeCurveGrad (juce::Graphics& g, const juce::Path& p, const juce::ColourGradient& grad, float width) const
+{
+    if (glow)
+    {
+        auto g1 = grad; g1.multiplyOpacity (0.10f);
+        g.setGradientFill (g1);
+        g.strokePath (p, juce::PathStrokeType (width * 6.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+        auto g2 = grad; g2.multiplyOpacity (0.25f);
+        g.setGradientFill (g2);
+        g.strokePath (p, juce::PathStrokeType (width * 2.8f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+    }
+    g.setGradientFill (grad);
+    g.strokePath (p, juce::PathStrokeType (width, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+}
+
 void SpectrumView::drawCurves (juce::Graphics& g, juce::Rectangle<float> r)
 {
     const auto& th = theme();
@@ -323,14 +351,30 @@ void SpectrumView::drawCurves (juce::Graphics& g, juce::Rectangle<float> r)
 
     if (showMix)
     {
-        if (fillA > 0.0f)
+        if (rainbowCol)
         {
-            juce::ColourGradient grad (th.mix.withAlpha (fillA), 0.0f, r.getY(),
-                                       th.mix.withAlpha (fillA * 0.06f), 0.0f, r.getBottom(), false);
-            g.setGradientFill (grad);
-            g.fillPath (makePath (mixA.display, r, true));
+            if (fillA > 0.0f)
+            {
+                const auto area = makePath (mixA.display, r, true);
+                g.setGradientFill (rainbowGradient (r.getX(), r.getRight(), r.getY(), juce::jmin (1.0f, fillA * 1.6f)));
+                g.fillPath (area);
+                juce::ColourGradient fade (col::plot.withAlpha (0.0f), 0.0f, r.getY(), col::plot.withAlpha (0.92f), 0.0f, r.getBottom(), false);
+                g.setGradientFill (fade);
+                g.fillPath (area);
+            }
+            strokeCurveGrad (g, makePath (mixA.display, r, false), rainbowGradient (r.getX(), r.getRight(), r.getY(), 1.0f), lineW * 1.1f);
         }
-        strokeCurve (g, makePath (mixA.display, r, false), th.mix, lineW);
+        else
+        {
+            if (fillA > 0.0f)
+            {
+                juce::ColourGradient grad (th.mix.withAlpha (fillA), 0.0f, r.getY(),
+                                           th.mix.withAlpha (fillA * 0.06f), 0.0f, r.getBottom(), false);
+                g.setGradientFill (grad);
+                g.fillPath (makePath (mixA.display, r, true));
+            }
+            strokeCurve (g, makePath (mixA.display, r, false), th.mix, lineW);
+        }
         if (holdOn)
         {
             g.setColour (th.mix.brighter (0.4f).withAlpha (0.6f));
@@ -339,7 +383,15 @@ void SpectrumView::drawCurves (juce::Graphics& g, juce::Rectangle<float> r)
     }
 
     if (showRef && refLoaded)
-        strokeCurve (g, makePath (refA.display, r, false), th.ref, lineW * 1.05f);
+    {
+        const auto p = makePath (refA.display, r, false);
+        if (rainbowCol)
+        {
+            g.setColour (col::bg.withAlpha (0.85f));
+            g.strokePath (p, juce::PathStrokeType (lineW + 3.5f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+        }
+        strokeCurve (g, p, th.ref, lineW * 1.15f);
+    }
 }
 
 void SpectrumView::drawBars (juce::Graphics& g, juce::Rectangle<float> r)
@@ -368,8 +420,9 @@ void SpectrumView::drawBars (juce::Graphics& g, juce::Rectangle<float> r)
             {
                 const bool lit = y + segH * 0.5f >= ym;
                 const float frac = (r.getBottom() - y) / r.getHeight();
-                const auto c = th.mix.interpolatedWith (th.mix.brighter (0.8f), frac * frac);
-                g.setColour (lit ? c : th.mix.withAlpha (0.05f));
+                const auto base = rainbowCol ? rainbow ((float) b / (float) (numBars - 1)) : th.mix;
+                const auto c = base.interpolatedWith (base.brighter (0.8f), frac * frac);
+                g.setColour (lit ? c : base.withAlpha (0.06f));
                 g.fillRect (col.getX(), y, col.getWidth(), segH);
             }
             const float yh = yForDb (barHoldMix[(size_t) b], r);
@@ -383,12 +436,13 @@ void SpectrumView::drawBars (juce::Graphics& g, juce::Rectangle<float> r)
         if (showRef && refLoaded)
         {
             const float yr = yForDb (barRef[(size_t) b], r);
+            const auto rc = th.ref;
             if (glow)
             {
-                g.setColour (th.ref.withAlpha (0.25f));
+                g.setColour (rc.withAlpha (0.25f));
                 g.fillRect (col.getX() - 1.0f, yr - 3.0f, col.getWidth() + 2.0f, 6.0f);
             }
-            g.setColour (th.ref);
+            g.setColour (rc);
             g.fillRect (col.getX(), yr - 1.5f, col.getWidth(), 3.0f);
         }
     }
@@ -481,8 +535,8 @@ void SpectrumView::drawPeakLabels (juce::Graphics& g, juce::Rectangle<float> r)
         pill = pill.withX (juce::jlimit (r.getX(), r.getRight() - tw, pill.getX()));
         g.setColour (col::bg.withAlpha (0.8f));
         g.fillRoundedRectangle (pill, 8.0f);
-        g.setColour (theme().mix.brighter (0.3f));
-        g.drawRoundedRectangle (pill, 8.0f, 1.0f);
+        g.setColour (rainbowCol ? rainbow ((float) c.second / (float) (n - 1)) : theme().mix.brighter (0.3f));
+        g.drawRoundedRectangle (pill, 8.0f, 1.2f);
         g.setColour (col::text);
         g.drawText (txt, pill, juce::Justification::centred);
         if (++count >= 3) break;
@@ -1259,8 +1313,21 @@ void TonalView::paint (juce::Graphics& g)
             const float v = d[(size_t) i];
             const juce::Colour c = std::abs (v) < 1.5f ? col::good : (std::abs (v) < 3.0f ? col::goldHi : col::warn);
             const float y0 = yOf (0.0f), y1 = yOf (v);
-            g.setColour (c.withAlpha (0.85f));
-            g.fillRoundedRectangle (juce::Rectangle<float> (bx, juce::jmin (y0, y1), bw, juce::jmax (2.0f, std::abs (y1 - y0))), 2.0f);
+            const auto barR = juce::Rectangle<float> (bx, juce::jmin (y0, y1), bw, juce::jmax (2.0f, std::abs (y1 - y0)));
+            if (colorfulUi())
+            {
+                const auto bc = rainbow ((float) i / (float) (SpecMath::numBands - 1));
+                juce::ColourGradient bg (bc.brighter (0.35f), 0.0f, barR.getY(), bc.darker (0.25f), 0.0f, barR.getBottom(), false);
+                g.setGradientFill (bg);
+                g.fillRoundedRectangle (barR, 3.0f);
+                g.setColour (c);
+                g.drawRoundedRectangle (barR, 3.0f, 1.2f);
+            }
+            else
+            {
+                g.setColour (c.withAlpha (0.85f));
+                g.fillRoundedRectangle (barR, 2.0f);
+            }
             g.setFont (font (11.5f, true));
             g.setColour (c);
             const float ty = v >= 0.0f ? y1 - 14.0f : y1 + 1.0f;
@@ -1423,6 +1490,8 @@ ViewPanel::ViewPanel()
     combo (cbMeterRange, { "60 dB  (0 bis -60)", "48 dB  (0 bis -48)", "24 dB  (0 bis -24, Mastering)" });
     combo (cbHold,  { "1 Sekunde", "3 Sekunden", "Bis Klick / Reset" });
     combo (cbLayout, { "Standard", "Großes Spektrum" });
+    combo (cbSpecColor, { "Themenfarbe", "Regenbogen" });
+    combo (cbSurface, { "Schlicht", "Farbig" });
     toggle (btnGlow);
     toggle (btnPeaks);
 
@@ -1434,10 +1503,10 @@ ViewPanel::ViewPanel()
     btnClose.onClick = [this] { setVisible (false); };
     addAndMakeVisible (btnClose);
 
-    left  = { { "#SPEKTRUM" }, { "Darstellung", &cbMode }, { "dB-Bereich", &cbRange }, { "Linienstärke", &cbLine },
+    left  = { { "#SPEKTRUM" }, { "Darstellung", &cbMode }, { "Farbe", &cbSpecColor }, { "dB-Bereich", &cbRange }, { "Linienstärke", &cbLine },
               { "Füllung", &cbFill }, { "Raster", &cbGrid }, { "Leuchten", &btnGlow }, { "Spitzen markieren", &btnPeaks } };
     right = { { "#FARBEN" }, { "Farbschema", &cbTheme }, { "#PEGEL" }, { "Stil", &cbMeter }, { "Bereich", &cbMeterRange },
-              { "Peak-Hold", &cbHold }, { "#LAYOUT" }, { "Aufteilung", &cbLayout } };
+              { "Peak-Hold", &cbHold }, { "#LAYOUT" }, { "Aufteilung", &cbLayout }, { "Oberfläche", &cbSurface } };
 }
 
 void ViewPanel::setStyle (const ViewStyle& s)
@@ -1453,6 +1522,8 @@ void ViewPanel::setStyle (const ViewStyle& s)
     cbMeterRange.setSelectedItemIndex (s.meterRange, juce::dontSendNotification);
     cbHold.setSelectedItemIndex (s.hold, juce::dontSendNotification);
     cbLayout.setSelectedItemIndex (s.layout, juce::dontSendNotification);
+    cbSpecColor.setSelectedItemIndex (s.specColor, juce::dontSendNotification);
+    cbSurface.setSelectedItemIndex (s.colorful ? 1 : 0, juce::dontSendNotification);
     btnGlow.setToggleState (s.glow, juce::dontSendNotification);
     btnPeaks.setToggleState (s.peaks, juce::dontSendNotification);
     btnGlow.setButtonText (s.glow ? "AN" : "AUS");
@@ -1473,6 +1544,8 @@ ViewStyle ViewPanel::getStyle() const
     s.meterRange = juce::jmax (0, cbMeterRange.getSelectedItemIndex());
     s.hold       = juce::jmax (0, cbHold.getSelectedItemIndex());
     s.layout     = juce::jmax (0, cbLayout.getSelectedItemIndex());
+    s.specColor  = juce::jmax (0, cbSpecColor.getSelectedItemIndex());
+    s.colorful   = cbSurface.getSelectedItemIndex() != 0;
     s.glow       = btnGlow.getToggleState();
     s.peaks      = btnPeaks.getToggleState();
     return s;
@@ -1486,7 +1559,7 @@ void ViewPanel::changed()
 
 void ViewPanel::resized()
 {
-    box = getLocalBounds().toFloat().withSizeKeepingCentre (800.0f, 404.0f);
+    box = getLocalBounds().toFloat().withSizeKeepingCentre (800.0f, 440.0f);
     labels.clear();
     headers.clear();
 
@@ -1780,6 +1853,7 @@ void Content::applyStyle (const ViewStyle& s, bool save)
     style = s;
     if (save) style.save (proc.getSettings());
     currentThemeIndex() = s.theme;
+    colorfulUi() = s.colorful;
     spectrum.setStyle (s);
     meters.style = s.meterStyle;
     meters.floorDb = s.meterFloor();
@@ -2032,31 +2106,77 @@ void Content::resized()
     viewPanel.setBounds (getLocalBounds());
 }
 
-void Content::panel (juce::Graphics& g, juce::Rectangle<int> r, const juce::String& title) const
+void Content::panel (juce::Graphics& g, juce::Rectangle<int> r, const juce::String& title, juce::Colour accent) const
 {
-    g.setColour (col::panel);
-    g.fillRoundedRectangle (r.toFloat(), 6.0f);
-    g.setColour (col::line);
-    g.drawRoundedRectangle (r.toFloat().reduced (0.5f), 6.0f, 1.0f);
+    const auto rf = r.toFloat();
+    if (! colorfulUi())
+    {
+        g.setColour (col::panel);
+        g.fillRoundedRectangle (rf, 6.0f);
+        g.setColour (col::line);
+        g.drawRoundedRectangle (rf.reduced (0.5f), 6.0f, 1.0f);
+        if (title.isNotEmpty())
+        {
+            g.setColour (col::gold);
+            g.setFont (font (12.0f, true));
+            g.drawText (title, r.getX() + 12, r.getY() + 7, r.getWidth() - 24, 22, juce::Justification::centredLeft);
+        }
+        return;
+    }
+
+    juce::ColourGradient bg (col::panel.interpolatedWith (accent, 0.10f), 0.0f, rf.getY(),
+                             col::panel, 0.0f, rf.getY() + juce::jmin (160.0f, rf.getHeight()), false);
+    g.setGradientFill (bg);
+    g.fillRoundedRectangle (rf, 7.0f);
+    g.setColour (accent.withAlpha (0.30f));
+    g.drawRoundedRectangle (rf.reduced (0.5f), 7.0f, 1.0f);
+    juce::ColourGradient topLine (accent.withAlpha (0.0f), rf.getX(), 0.0f, accent.withAlpha (0.0f), rf.getRight(), 0.0f, false);
+    topLine.addColour (0.15, accent.withAlpha (0.9f));
+    topLine.addColour (0.6, accent.withAlpha (0.35f));
+    g.setGradientFill (topLine);
+    g.fillRect (rf.getX() + 8.0f, rf.getY(), rf.getWidth() - 16.0f, 2.0f);
+
     if (title.isNotEmpty())
     {
-        g.setColour (col::gold);
+        g.setColour (accent);
+        g.fillRoundedRectangle (rf.getX() + 12.0f, rf.getY() + 12.0f, 4.0f, 13.0f, 2.0f);
         g.setFont (font (12.0f, true));
-        g.drawText (title, r.getX() + 12, r.getY() + 7, r.getWidth() - 24, 22, juce::Justification::centredLeft);
+        g.drawText (title, r.getX() + 22, r.getY() + 7, r.getWidth() - 34, 22, juce::Justification::centredLeft);
     }
 }
 
 void Content::paint (juce::Graphics& g)
 {
     g.fillAll (col::bg);
+    const bool colorful = colorfulUi();
 
-    juce::ColourGradient hg (juce::Colour (0xff17140c), 0, 0, col::bg, 0, (float) rHeader.getBottom(), false);
+    if (colorful)
+    {
+        juce::ColourGradient glowA (juce::Colour (0x5a3a1a6a), (float) W * 0.12f, 40.0f, juce::Colour (0x003a1a6a), (float) W * 0.55f, (float) H * 0.7f, true);
+        g.setGradientFill (glowA);
+        g.fillAll();
+        juce::ColourGradient glowB (juce::Colour (0x40104a5a), (float) W * 0.92f, (float) H * 0.95f, juce::Colour (0x00104a5a), (float) W * 0.45f, (float) H * 0.3f, true);
+        g.setGradientFill (glowB);
+        g.fillAll();
+    }
+
+    juce::ColourGradient hg (colorful ? juce::Colour (0xff1d1428) : juce::Colour (0xff17140c), 0, 0,
+                             colorful ? juce::Colour (0x000a0a0b) : col::bg, 0, (float) rHeader.getBottom(), false);
     g.setGradientFill (hg);
     g.fillRect (rHeader);
-    g.setColour (col::gold.withAlpha (0.35f));
-    g.drawHorizontalLine (rHeader.getBottom() - 1, 0.0f, (float) W);
-
-    g.setColour (col::gold);
+    if (colorful)
+    {
+        g.setGradientFill (rainbowGradient (0.0f, (float) W, 0.0f, 0.85f));
+        g.fillRect (0.0f, (float) rHeader.getBottom() - 2.0f, (float) W, 2.0f);
+        juce::ColourGradient lg (col::goldHi, 18.0f, 10.0f, juce::Colour (0xffff6a3a), 100.0f, 46.0f, false);
+        g.setGradientFill (lg);
+    }
+    else
+    {
+        g.setColour (col::gold.withAlpha (0.35f));
+        g.drawHorizontalLine (rHeader.getBottom() - 1, 0.0f, (float) W);
+        g.setColour (col::gold);
+    }
     g.setFont (font (32.0f, true));
     g.drawText ("K-54", 18, 8, 90, 40, juce::Justification::centredLeft);
     g.setColour (col::goldHi);
@@ -2080,7 +2200,7 @@ void Content::paint (juce::Graphics& g)
                     466, 47, 376, 11, juce::Justification::centred);
     }
 
-    panel (g, rSpec, u8s ("SPEKTRUM"));
+    panel (g, rSpec, u8s ("SPEKTRUM"), juce::Colour (0xffffb03a));
     g.setColour (col::dim);
     g.setFont (font (10.0f));
     if (! pro)
@@ -2090,12 +2210,12 @@ void Content::paint (juce::Graphics& g)
 
     if (! bigSpec)
     {
-        panel (g, rTonal, u8s ("TONALE BALANCE  ·  Mix gegenüber Referenz"));
-        panel (g, rHist, pro && scopeTab ? u8s ("STEREO") : u8s ("VERLAUF  ·  Short-Term, 60 s"));
+        panel (g, rTonal, u8s ("TONALE BALANCE  ·  Mix gegenüber Referenz"), juce::Colour (0xffff6f91));
+        panel (g, rHist, pro && scopeTab ? u8s ("STEREO") : u8s ("VERLAUF  ·  Short-Term, 60 s"), juce::Colour (0xff5fe08a));
     }
-    panel (g, rLoud, u8s ("LAUTHEIT"));
-    panel (g, rMeter, u8s ("PEGEL"));
-    panel (g, rRef, {});
+    panel (g, rLoud, u8s ("LAUTHEIT"), juce::Colour (0xffb58cff));
+    panel (g, rMeter, u8s ("PEGEL"), juce::Colour (0xff4fd2ff));
+    panel (g, rRef, {}, theme().ref);
 
     g.setColour (theme().ref);
     g.setFont (font (12.0f, true));

@@ -20,6 +20,8 @@ struct ViewStyle
     int meterRange = 0;   // -60 / -48 / -24 dB
     int hold = 1;         // Peak-Hold 1 s / 3 s / unendlich
     int layout = 0;       // 0 Standard, 1 Großes Spektrum
+    int specColor = 1;    // 0 Themenfarbe, 1 Regenbogen
+    bool colorful = true; // farbige Oberfläche
 
     static constexpr int numThemes = 5;
 
@@ -44,6 +46,8 @@ struct ViewStyle
         meterRange = p.getIntValue ("v_meterRange", meterRange);
         hold       = p.getIntValue ("v_hold", hold);
         layout     = p.getIntValue ("v_layout", layout);
+        specColor  = p.getIntValue ("v_specColor", specColor);
+        colorful   = p.getBoolValue ("v_colorful", colorful);
     }
 
     void save (juce::PropertiesFile& p) const
@@ -60,6 +64,8 @@ struct ViewStyle
         p.setValue ("v_meterRange", meterRange);
         p.setValue ("v_hold", hold);
         p.setValue ("v_layout", layout);
+        p.setValue ("v_specColor", specColor);
+        p.setValue ("v_colorful", colorful);
         p.saveIfNeeded();
     }
 
@@ -67,7 +73,8 @@ struct ViewStyle
     {
         return specMode == o.specMode && range == o.range && line == o.line && fill == o.fill && grid == o.grid
             && glow == o.glow && peaks == o.peaks && theme == o.theme && meterStyle == o.meterStyle
-            && meterRange == o.meterRange && hold == o.hold && layout == o.layout;
+            && meterRange == o.meterRange && hold == o.hold && layout == o.layout
+            && specColor == o.specColor && colorful == o.colorful;
     }
 };
 
@@ -78,6 +85,21 @@ struct Theme
 };
 
 inline int& currentThemeIndex() { static int idx = 0; return idx; }
+inline bool& colorfulUi() { static bool c = true; return c; }
+
+// Regenbogen über den Frequenzbereich: 0 = 20 Hz (rot) … 1 = 20 kHz (violett)
+inline juce::Colour rainbow (float t, float alpha = 1.0f)
+{
+    return juce::Colour::fromHSV (0.80f * juce::jlimit (0.0f, 1.0f, t), 0.72f, 1.0f, alpha);
+}
+
+inline juce::ColourGradient rainbowGradient (float x0, float x1, float y, float alpha)
+{
+    juce::ColourGradient g (rainbow (0.0f, alpha), x0, y, rainbow (1.0f, alpha), x1, y, false);
+    for (int i = 1; i < 8; ++i)
+        g.addColour (i / 8.0, rainbow ((float) i / 8.0f, alpha));
+    return g;
+}
 
 inline const Theme& theme()
 {

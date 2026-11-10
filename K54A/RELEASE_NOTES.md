@@ -1,5 +1,11 @@
 K-54 Analyzer · Keller54 · by Frank E. – BETA
 
+Neu in 1.4.0 – farbiger:
+- Spektrum in Regenbogenfarben (Bass rot bis Höhen violett), auch als Terzband-Balken und Spektrogramm
+- Farbige Oberfläche: Felder mit eigener Akzentfarbe, Farbverläufe, Regenbogenlinie im Kopf, glänzende Knöpfe
+- Tonale Balance mit farbigen Bändern
+- In ANSICHT umschaltbar: Spektrum-Farbe (Themenfarbe / Regenbogen) und Oberfläche (Schlicht / Farbig)
+
 Neu in 1.3.0 – neue Grafik, alles einstellbar (Knopf ANSICHT):
 - Spektrum als Kurve mit Leuchten, als Terzband-Balken (LED) oder als Spektrogramm mit Kurve darüber
 - Markierung der 3 stärksten Spitzen mit Frequenz
