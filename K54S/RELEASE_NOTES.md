@@ -1,6 +1,7 @@
 K-54 S · Keller54 · by Frank E. – BETA
 
 Neu in 1.2.0 – KEYS-Ebene, Soul-Klänge und Kirchenorgeln der Welt:
+(Beta-Version: Funktionen und Klänge können sich bis zur fertigen Version noch ändern.)
 - Neuer Reiter KEYS: zweite Klangebene, spielt zusammen mit dem Synth (oder allein)
 - Funk Clav: geschlagene Saite mit Tonabnehmer, Tonschalter, Dämpfer, Wah (Anschlag oder Mod-Rad)
 - Tine Piano: 70er-E-Piano mit Bark und Glocke, Phaser, Auto-Pan, Tremolo; auch Reed-Piano
