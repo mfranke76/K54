@@ -50,6 +50,8 @@ juce_add_plugin(K55
     PLUGIN_CODE                 K5S1
     FORMATS                     ${K55_FORMATS}
     IS_SYNTH                    TRUE
+    MICROPHONE_PERMISSION_ENABLED TRUE
+    MICROPHONE_PERMISSION_TEXT  "Der K-54 S nimmt Samples vom Audio-Eingang auf."
     NEEDS_MIDI_INPUT            TRUE
     NEEDS_MIDI_OUTPUT           FALSE
     IS_MIDI_EFFECT              FALSE

@@ -47,6 +47,8 @@ juce_add_plugin(K54
     PLUGIN_CODE                 K54s
     FORMATS                     ${K54_FORMATS}
     IS_SYNTH                    TRUE
+    MICROPHONE_PERMISSION_ENABLED TRUE
+    MICROPHONE_PERMISSION_TEXT  "Der K-54 nimmt fuer den Looper vom Audio-Eingang auf."
     NEEDS_MIDI_INPUT            TRUE
     NEEDS_MIDI_OUTPUT           FALSE
     IS_MIDI_EFFECT              FALSE
