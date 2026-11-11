@@ -41,8 +41,17 @@ Die Referenz wird mit dem Projekt gespeichert (Pfad zur Datei).
 DEINSTALLIEREN
 Doppelklick auf "K-54 Analyzer deinstallieren.command".
 
-HINWEIS
-Weil der K-54 Analyzer nicht bei Apple registriert ist: Falls macOS beim Öffnen
-meldet, der Entwickler sei nicht verifiziert, mit Rechtsklick (Ctrl-Klick) auf die
-Datei > "Öffnen" bestätigen, oder unter Systemeinstellungen >
-Datenschutz & Sicherheit > "Trotzdem öffnen".
+ERSTES ÖFFNEN (nur einmal nötig)
+K-54 Analyzer ist kostenlos und nicht kostenpflichtig bei Apple registriert.
+macOS fragt deshalb beim ersten Öffnen einmal nach:
+1. Doppelklick auf "K-54 Analyzer installieren.pkg" -> Meldung "... nicht geöffnet" -> "Fertig".
+2. Apfel-Menü > Systemeinstellungen > Datenschutz & Sicherheit,
+   ganz nach unten scrollen.
+3. Bei "K-54 Analyzer installieren.pkg wurde blockiert" auf "Trotzdem öffnen" klicken
+   und mit dem Mac-Passwort bestätigen.
+   (macOS 14 oder älter: Ctrl-Klick auf die Datei > "Öffnen".)
+Danach starten Plug-in und App ohne weitere Meldung. Updates über den
+UPDATE-Knopf im Plug-in brauchen diesen Schritt nicht.
+
+Für Profis (Terminal), vor dem Öffnen der DMG:
+   xattr -d com.apple.quarantine ~/Downloads/K-54-Analyzer-*-Installer.dmg

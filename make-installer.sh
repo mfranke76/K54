@@ -122,6 +122,8 @@ cat > "$BUILD/scripts/postinstall" <<'POST'
 for H in /Users/*; do
   rm -rf "$H/Library/Audio/Plug-Ins/Components/K-54.component" "$H/Library/Audio/Plug-Ins/VST3/K-54.vst3" 2>/dev/null
 done
+# Quarantaene-Kennzeichen entfernen, damit DAW und App ohne Rueckfrage starten
+xattr -dr com.apple.quarantine "/Library/Audio/Plug-Ins/Components/K-54.component" "/Library/Audio/Plug-Ins/VST3/K-54.vst3" "/Applications/K-54.app" 2>/dev/null
 killall -9 AudioComponentRegistrar 2>/dev/null
 exit 0
 POST
