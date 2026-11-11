@@ -45,3 +45,7 @@ Version 1.0.0:
 - Spektrum 20 Hz bis 20 kHz, Mix und Referenz gleichzeitig, einzeln ein/aus
 - Lautheit nach EBU R128 / ITU BS.1770: Integrated, Short-Term, Momentary, LRA, True Peak, Ziel-Lautheit
 - Pegel, Korrelation, Lautheitsverlauf, A/B mit Lautheitsangleich, DAW-Sync oder freie Wiedergabe
+
+Installer (neu gebaut am 11.11.2026, gleiche Version):
+- Hilfe fürs erste Öffnen unter macOS 15 und Windows: keller54.de/installieren
+- Nach der Installation starten Plug-in und App ohne weitere Rückfrage

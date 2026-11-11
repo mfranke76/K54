@@ -49,3 +49,7 @@ Mac (Apple Silicon + Intel): AU, VST3 und App
 Windows 10/11 (64 Bit): VST3 und App
 
 Flügel-Samples: Salamander Grand Piano V3 von Alexander Holm (CC BY 3.0).
+
+Installer (neu gebaut am 11.11.2026, gleiche Version):
+- Hilfe fürs erste Öffnen unter macOS 15 und Windows: keller54.de/installieren
+- Nach der Installation starten Plug-in und App ohne weitere Rückfrage
