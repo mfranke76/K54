@@ -49,6 +49,8 @@ public:
             }
 
             owner.loadingSlot.store (job.slot);
+            owner.loadProgress.store (0.0f);
+            owner.loadStage.store (0);
             owner.setStatus (refLoading, juce::String::fromUTF8 ("Lade ") + job.file.getFileName() + " ...");
 
             juce::String error;
@@ -599,6 +601,8 @@ void AnalyzerProcessor::loadReference (const juce::File& file, int slot)
         return;
     }
     loadingSlot.store (slot);
+    loadProgress.store (0.0f);
+    loadStage.store (0);
     setStatus (refLoading, u8 ("Lade ") + file.getFileName() + " ...");
     loader->request (file, rate, slot);
 }
@@ -657,7 +661,18 @@ std::unique_ptr<RefData> AnalyzerProcessor::decodeReference (const juce::File& f
     const int pad = 512;
     juce::AudioBuffer<float> raw (2, (int) len + pad);
     raw.clear();
-    reader->read (&raw, 0, (int) len, 0, true, true);
+    loadStage.store (0);
+    loadProgress.store (0.0f);
+    {
+        const int chunk = 1 << 16;
+        for (int64_t pos = 0; pos < len; pos += chunk)
+        {
+            const int n = (int) juce::jmin<int64_t> (chunk, len - pos);
+            reader->read (&raw, (int) pos, n, pos, true, true);
+            loadProgress.store (0.5f * (float) (pos + n) / (float) len);
+            if (shouldStop()) return nullptr;
+        }
+    }
     if (reader->numChannels == 1)
         raw.copyFrom (1, 0, raw, 0, 0, (int) len);
 
@@ -677,7 +692,9 @@ std::unique_ptr<RefData> AnalyzerProcessor::decodeReference (const juce::File& f
         for (int ch = 0; ch < 2; ++ch)
         {
             juce::WindowedSincInterpolator interp;
+            loadStage.store (1);
             interp.process (ratio, raw.getReadPointer (ch), data->audio.getWritePointer (ch), outLen);
+            loadProgress.store (0.5f + 0.06f * (float) (ch + 1));
             if (shouldStop()) return nullptr;
         }
     }
@@ -700,6 +717,8 @@ std::unique_ptr<RefData> AnalyzerProcessor::decodeReference (const juce::File& f
     for (int pos = 0; pos < total; pos += 8192)
     {
         lm.process (L + pos, R + pos, juce::jmin (8192, total - pos));
+        loadStage.store (2);
+        loadProgress.store (0.62f + 0.18f * (float) pos / (float) juce::jmax (1, total));
         if ((pos & 0xFFFFF) == 0 && shouldStop()) return nullptr;
     }
     data->integrated = lm.integrated();
@@ -742,6 +761,8 @@ std::unique_ptr<RefData> AnalyzerProcessor::decodeReference (const juce::File& f
                 for (int k = 0; k <= size / 2; ++k) avg[(size_t) k] += buf[(size_t) k];
                 ++frames;
             }
+            loadStage.store (3);
+            loadProgress.store (0.80f + 0.16f * (float) start / (float) juce::jmax (1, total));
             if ((++count & 63) == 0 && shouldStop()) return nullptr;
         }
 
@@ -755,6 +776,8 @@ std::unique_ptr<RefData> AnalyzerProcessor::decodeReference (const juce::File& f
     }
 
     // Wellenform-Übersicht
+    loadStage.store (4);
+    loadProgress.store (0.97f);
     const int cols = 1600;
     data->wave.assign (cols, 0.0f);
     for (int c = 0; c < cols; ++c)
@@ -767,6 +790,7 @@ std::unique_ptr<RefData> AnalyzerProcessor::decodeReference (const juce::File& f
         data->wave[(size_t) c] = m;
     }
 
+    loadProgress.store (1.0f);
     return data;
 }
 

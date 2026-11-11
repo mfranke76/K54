@@ -1,5 +1,8 @@
 K-54 Analyzer · Keller54 · by Frank E. – BETA
 
+Neu in 1.6.0:
+- Ladebalken beim Laden eines Referenz-Tracks: zeigt Fortschritt in Prozent und den Arbeitsschritt (Datei lesen, Samplerate umrechnen, Lautheit messen, Spektrum berechnen)
+
 Neu in 1.5.0 – so wie du es brauchst:
 - Eigene Farben: Farbwähler für Mix, Referenz, Differenzkurve und die Akzentfarbe der Felder
 - Felder einzeln ein- und ausblenden: Tonale Balance, Verlauf/Stereo, Lautheit, Pegel – das Spektrum wird automatisch größer

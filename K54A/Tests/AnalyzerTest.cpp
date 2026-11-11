@@ -525,6 +525,57 @@ int main (int argc, char** argv)
             check (c.getStyle() == ViewStyle {}, "Ansicht auf Standard");
         }
 
+        // ---- 1.6: Ladebalken ----------------------------------------------------
+        {
+            const double fs = 44100.0;
+            const int n = (int) (240 * fs);
+            juce::AudioBuffer<float> lb (2, n);
+            juce::Random r2 (3);
+            for (int i = 0; i < n; ++i)
+            {
+                const float v = 0.2f * (float) std::sin (2.0 * juce::MathConstants<double>::pi * 220.0 * i / fs) + 0.05f * (r2.nextFloat() - 0.5f);
+                lb.setSample (0, i, v); lb.setSample (1, i, v);
+            }
+            auto longF = outDir.getChildFile ("Lange Referenz.wav");
+            longF.deleteFile();
+            {
+                std::unique_ptr<juce::OutputStream> os = std::make_unique<juce::FileOutputStream> (longF);
+                juce::WavAudioFormat wav;
+                auto w = wav.createWriterFor (os, juce::AudioFormatWriterOptions{}.withSampleRate (fs).withNumChannels (2).withBitsPerSample (24));
+                w->writeFromAudioSampleBuffer (lb, 0, n);
+            }
+            lb.setSize (0, 0);
+
+            proc->setSlot (2);
+            proc->loadReference (longF, 2);
+            bool seen = false;
+            float last = 0.0f;
+            bool monotonic = true;
+            for (int i = 0; i < 15000 && proc->getRefStatus() != AnalyzerProcessor::refReady; ++i)
+            {
+                juce::Thread::sleep (2);
+                const float pnow = proc->getLoadProgress();
+                if (proc->getRefStatus() == AnalyzerProcessor::refLoading)
+                {
+                    monotonic = monotonic && pnow + 1.0e-6f >= last;
+                    last = pnow;
+                    if (! seen && pnow > 0.3f)
+                    {
+                        editor->runTick();
+                        snap ("screen_laden.png");
+                        seen = true;
+                    }
+                }
+            }
+            check (seen, "Ladebalken sichtbar während des Ladens");
+            check (monotonic, "Ladefortschritt läuft nur vorwärts");
+            check (proc->getRef (2) != nullptr && proc->getLoadProgress() >= 0.999f, "Ladefortschritt am Ende 100 %");
+            proc->clearReference (2);
+            proc->setSlot (0);
+            longF.deleteFile();
+            for (int t = 0; t < 40; ++t) { runAudio (*proc, 1.0 / 30.0, 0.5f, rnd, st); editor->runTick(); }
+        }
+
         const auto report = c.buildReport();
         check (report.contains ("Integrated") && report.contains ("TONALE BALANCE"), "Messbericht enthält Lautheit und Tonale Balance");
         outDir.getChildFile ("Bericht.txt").replaceWithText (report);

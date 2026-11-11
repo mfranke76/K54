@@ -1345,6 +1345,44 @@ void TonalView::paint (juce::Graphics& g)
 
 //==============================================================================
 // WELLENFORM REFERENZ
+// Ladebalken für den Referenz-Track
+static void drawLoadBar (juce::Graphics& g, juce::Rectangle<float> area, AnalyzerProcessor& proc)
+{
+    static const char* stages[] { "Datei lesen", "Samplerate umrechnen", "Lautheit messen", "Spektrum berechnen", "Wellenform" };
+    const float p = juce::jlimit (0.0f, 1.0f, proc.getLoadProgress());
+
+    g.setColour (col::bg.withAlpha (0.82f));
+    g.fillRoundedRectangle (area.expanded (6.0f, 4.0f), 6.0f);
+
+    auto text = area.removeFromTop (18.0f);
+    g.setFont (font (12.5f, true));
+    g.setColour (col::text);
+    g.drawText (proc.getRefMessage(), text, juce::Justification::centredLeft, true);
+    g.setColour (theme().ref.brighter (0.3f));
+    g.drawText (u8s (stages[juce::jlimit (0, 4, proc.getLoadStage())]) + u8s (" · ") + juce::String (juce::roundToInt (p * 100.0f)) + " %",
+                text, juce::Justification::centredRight);
+
+    auto bar = area.withHeight (12.0f).withY (area.getY() + 4.0f);
+    g.setColour (col::plot);
+    g.fillRoundedRectangle (bar, 6.0f);
+    g.setColour (col::line.brighter (0.3f));
+    g.drawRoundedRectangle (bar, 6.0f, 1.0f);
+    auto fillR = bar.reduced (1.5f).withWidth (juce::jmax (8.0f, (bar.getWidth() - 3.0f) * p));
+    if (colorfulUi())
+        g.setGradientFill (rainbowGradient (bar.getX(), bar.getRight(), 0.0f, 1.0f));
+    else
+        g.setGradientFill (juce::ColourGradient (theme().ref.brighter (0.3f), 0.0f, fillR.getY(), theme().ref.darker (0.3f), 0.0f, fillR.getBottom(), false));
+    g.fillRoundedRectangle (fillR, 5.0f);
+
+    // laufender Glanz, damit man sieht, dass es arbeitet
+    const float t = (float) (juce::Time::getMillisecondCounter() % 1200) / 1200.0f;
+    const float gx = fillR.getX() + t * fillR.getWidth();
+    juce::ColourGradient shine (juce::Colours::white.withAlpha (0.0f), gx - 30.0f, 0.0f, juce::Colours::white.withAlpha (0.0f), gx + 30.0f, 0.0f, false);
+    shine.addColour (0.5, juce::Colours::white.withAlpha (0.45f));
+    g.setGradientFill (shine);
+    g.fillRoundedRectangle (fillR, 5.0f);
+}
+
 void WaveView::paint (juce::Graphics& g)
 {
     auto b = getLocalBounds().toFloat();
@@ -1402,7 +1440,11 @@ void WaveView::paint (juce::Graphics& g)
         g.setColour (dragHover ? theme().mix.brighter (0.4f) : col::text.withAlpha (0.75f));
         juce::String msg = u8s ("Slot ") + juce::String (proc.currentSlot() + 1)
                          + u8s (": Referenz-Track hierher ziehen oder LADEN klicken");
-        if (loadingHere) msg = proc.getRefMessage();
+        if (loadingHere)
+        {
+            drawLoadBar (g, b.reduced (40.0f, 0.0f).withSizeKeepingCentre (b.getWidth() - 80.0f, 36.0f), proc);
+            return;
+        }
         g.drawText (msg, b.withTrimmedBottom (18), juce::Justification::centred);
         g.setFont (font (11.0f));
         const bool err = status == AnalyzerProcessor::refError;
@@ -1442,7 +1484,9 @@ void WaveView::paint (juce::Graphics& g)
     g.setColour (col::dim);
     const juce::String info = mmss (posSec) + " / " + mmss (ref->seconds) + u8s ("   ·   ") + fmt (ref->integrated)
                             + " LUFS   " + fmt (ref->truePeak) + " dBTP   LRA " + fmt (ref->lra);
-    g.drawText (loadingHere ? proc.getRefMessage() : info, head, juce::Justification::centredRight);
+    g.drawText (info, head, juce::Justification::centredRight);
+    if (loadingHere)
+        drawLoadBar (g, b.reduced (40.0f, 0.0f).withSizeKeepingCentre (b.getWidth() - 80.0f, 36.0f), proc);
 
     if (dragHover)
     {

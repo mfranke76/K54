@@ -187,6 +187,8 @@ public:
     int getRefVersion() const noexcept { return refVersion.load(); }
     int getRefStatus() const noexcept { return refStatus.load(); }
     int getLoadingSlot() const noexcept { return loadingSlot.load(); }
+    float getLoadProgress() const noexcept { return loadProgress.load(); }   // 0 … 1
+    int getLoadStage() const noexcept { return loadStage.load(); }           // 0 lesen … 4 Wellenform
     juce::String getRefMessage() const { const juce::ScopedLock sl (msgLock); return refMessage; }
     double getRefPositionSeconds() const noexcept { return refPosSeconds.load(); }
     bool isRefRunning() const noexcept { return refRunning.load(); }
@@ -232,7 +234,8 @@ private:
     std::array<std::atomic<int64_t>, numSlots> refOffset {};
     std::array<std::atomic<bool>, numSlots> keepOffset {};
     std::array<std::atomic<bool>, numSlots> resetSlotPos {};
-    std::atomic<int> refVersion { 0 }, refStatus { refEmpty }, loadingSlot { -1 }, resetCount { 0 };
+    std::atomic<int> refVersion { 0 }, refStatus { refEmpty }, loadingSlot { -1 }, resetCount { 0 }, loadStage { 0 };
+    std::atomic<float> loadProgress { 0.0f };
     juce::CriticalSection msgLock, trashLock, pendingLock;
     juce::String refMessage;
     std::vector<std::pair<RefData*, juce::uint32>> trash;
