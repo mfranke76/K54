@@ -57,7 +57,7 @@ namespace KeysTables
     };
 
     enum Kind { Principal = 0, StoppedFlute, OpenFlute, String, Reed, Clarinet, Tibia, Sine,
-                Quintadena, HarmonicFlute, FrenchReed, Chamade, Oboe, VoxHumana, NumKinds };
+                Quintadena, HarmonicFlute, FrenchReed, Chamade, Oboe, VoxHumana, SpanishReed, Regal, NumKinds };
 
     inline float amp (int kind, int n) noexcept
     {
@@ -103,6 +103,19 @@ namespace KeysTables
                 if (n == 1) return 0.3f;
                 const float form = 1.0f + 1.8f * std::exp (-0.5f * std::pow ((fn - 4.0f) / 1.8f, 2.0f));
                 return form * (n % 2 == 1 ? 1.0f : 0.45f) / std::pow (fn, 0.9f) * (n > 30 ? 0.0f : 1.0f);
+            }
+            // Trompeta real (spanische Horizontaltrompete): kurzer, sehr heller, schmetternder Klang
+            case SpanishReed:
+            {
+                const float form = 1.0f + 3.4f * std::exp (-0.5f * std::pow ((fn - 9.0f) / 4.0f, 2.0f));
+                return form / std::pow (fn, 0.22f) * (n > 100 ? 0.0f : 1.0f);
+            }
+            // Regal: winzige Becher, naselnd-schnarrend (Dudelsack-Chanter)
+            case Regal:
+            {
+                if (n == 1) return 0.45f;
+                const float form = 1.0f + 2.6f * std::exp (-0.5f * std::pow ((fn - 7.0f) / 3.0f, 2.0f));
+                return form * (n % 2 == 1 ? 1.0f : 0.6f) / std::pow (fn, 0.55f) * (n > 60 ? 0.0f : 1.0f);
             }
             default:           return n == 1 ? 1.0f : 0.0f;
         }
@@ -168,7 +181,7 @@ namespace PipeOrgan
                 // 1.3: Register nach echten Dispositionen (Freiberg, Notre-Dame)
                 Gedackt8, Nasat, Terz, Cornet, Quintadena16, Quintadena8, VoxHumana8, Posaune16, Clarin4, Principal16,
                 FluteHarm8, Trompette8, Clairon4, BombardeFr16, Chamade8, Chamade4, PleinJeu, Hautbois8, Larigot, Septieme,
-                MixturIV, NumStops };
+                MixturIV, TrompetaReal8, Bajoncillo4, Regal8, NumStops };
 
     struct StopDef
     {
@@ -221,6 +234,9 @@ namespace PipeOrgan
             { Principal,    { 6.0f },               1, 0.20f, 0.065f, false },  // Larigot 1 1/3'
             { OpenFlute,    { 7.0f },               1, 0.16f, 0.065f, false },  // Septieme 1 1/7'
             { Principal,    { 4.0f, 6.0f, 8.0f, 12.0f }, 4, 0.19f, 0.070f, false },  // Mixtur IV 2'
+            { SpanishReed,  { 1.0f },               1, 0.46f, 0.160f, true  },  // Trompeta real 8' (en chamade)
+            { SpanishReed,  { 2.0f },               1, 0.34f, 0.170f, true  },  // Bajoncillo 4'
+            { Regal,        { 1.0f },               1, 0.40f, 0.150f, true  },  // Regal 8' (Dudelsack-Chanter)
         };
         return defs[juce::jlimit (0, NumStops - 1, s)];
     }
@@ -234,6 +250,8 @@ namespace PipeOrgan
         float pedalReed = 0.0f;     // Zungen im Pedal beim Tutti (Notre-Dame: Contre-Bombarde 32')
         float pedalReedRatio = 0.5f;
         int   pedalReedKind = 4;    // KeysTables::Reed (deutsch); FrenchReed fuer franzoesische Orgeln
+        bool  drone = false;        // Dudelsack: Bordun-Toene (A) klingen, solange gespielt wird
+        bool  grace = false;        // Dudelsack: kurze Vorschlagsnote (hohes G) vor jedem Ton
     };
 
     inline const World& world (int w)
@@ -287,6 +305,10 @@ namespace PipeOrgan
             { { Tibia8, VoxCeleste8, Floete4, Gambe8, Trompete8, Krummhorn8, Bourdon16, Superoktave2 },                  0.00f, 0.05f, 0.00f, 1.0f, 1.0f, 6.6f, 0.42f, false, false },
             // Dorfkirche – klein, etwas verstimmt, hoerbarer Wind
             { { Floete8, Prinzipal8, Floete4, Oktave4, Superoktave2, Mixtur },                                            0.35f, 0.38f, 0.00f, 2.2f, 0.0f, 0, 0, false, false },
+            // Dudelsack & Spanische Trompeten: Chanter aus Regal, Krummhorn und Aliquoten, dann Trompeta real und
+            // Bajoncillo (en chamade); Bordun auf A, Vorschlagsnoten wie beim Dudelsack
+            { { Regal8, Krummhorn8, Nasat, Terz, Gedackt8, TrompetaReal8, Bajoncillo4, Cornet },
+              0.05f, 0.20f, 0.20f, 0.6f, 1.30f, 0, 0, false, false, 0, 0.0f, 0.5f, KeysTables::Reed, true, true },
         };
         return worlds[(size_t) juce::jlimit (0, (int) worlds.size() - 1, w)];
     }
@@ -405,6 +427,13 @@ public:
         env = 0.0f;
         relGain = 1.0f;
         percOn = percTrigger;
+        droneGain = 1.0f;
+        graceUntil = 0.0;
+        if (kb.p.model == ParamChoices::kPipe && PipeOrgan::world (kb.p.variant).grace)
+        {
+            graceNote = playNote >= 79 ? 81 : 79;          // hohes G (bzw. A) wie beim Dudelsack-Chanter
+            graceUntil = 0.030 + 0.012 * (1.0 - vel);       // leiser Anschlag = etwas laengerer Vorschlag
+        }
         noiseLp = 0.0f;
         clickEnv = 1.0f;
         pan = 0.0f;
@@ -455,6 +484,9 @@ public:
     }
 
     void noteOff() { gate = false; }
+
+    /** Bordun-Stimme (Dudelsack): leiser, ohne Vorschlag */
+    void makeDrone (float gain) { droneGain = gain; graceUntil = 0.0; }
     void kill()    { active = false; gate = false; }
 
     /** Mono-Signal der Stimme in outL/outR (mit Panorama) addieren */
@@ -659,7 +691,8 @@ private:
         }
         if (w.wellTempered || w.temperament == 1) pitchCents += PipeOrgan::wellTemperedCents (pitchNote);
         else if (w.temperament == 2)         pitchCents += PipeOrgan::silbermannCents (pitchNote);
-        const double f0 = hz * std::exp2 (pitchCents / 1200.0);
+        double f0 = hz * std::exp2 (pitchCents / 1200.0);
+        if (t < graceUntil) f0 *= std::exp2 ((graceNote - pitchNote) / 12.0);   // Vorschlagsnote
         const float gateT = gate ? 1.0f : 0.0f;
         const float relSpeed = 0.0016f * (1.4f - p.decay);
 
@@ -721,7 +754,7 @@ private:
         }
         const float windN = (noise.nextFloat() - 0.5f) * w.wind * p.b * 0.02f * (anyOn ? 1.0f : 0.0f);
         if (! gate && ! anyOn && t > 0.01) active = false;
-        return (y * kb.organNorm + chiff + windN) * trem;
+        return (y * kb.organNorm + chiff + windN) * trem * droneGain;
     }
 
     float rankDet (int st) const noexcept
@@ -830,6 +863,9 @@ private:
     SVF f1, f2;
     juce::Random rng;
     bool active = false, gate = false, percOn = false;
+    float droneGain = 1.0f;
+    double graceUntil = 0.0;
+    int graceNote = 79;
     int note = 60, pitchNote = 60, model = 0, variant = 0;
     float vel = 1.0f;
     juce::uint64 age = 0;
@@ -982,6 +1018,8 @@ public:
         for (auto& v : voices) { if (hard) v.kill(); else v.noteOff(); }
         pendingOffs.clear();
         held = 0;
+        if (droneOn && ! hard) stopDrones();
+        droneOn = false;
     }
 
     int activeVoices() const { int c = 0; for (auto& v : voices) c += v.isActive() ? 1 : 0; return c; }
@@ -1239,19 +1277,49 @@ private:
         KeysVoice* target = nullptr;
         for (auto& v : voices) if (v.isActive() && v.getNote() == note) { target = &v; break; }
         if (! target) for (auto& v : voices) if (! v.isActive()) { target = &v; break; }
-        if (! target) for (auto& v : voices) if (v.isReleasing() && (! target || v.getAge() < target->getAge())) target = &v;
+        // Bordun-Stimmen (Dudelsack) nicht fuer neue Toene stehlen
+        if (! target) for (auto& v : voices) if (v.getNote() < droneId && v.isReleasing() && (! target || v.getAge() < target->getAge())) target = &v;
+        if (! target) for (auto& v : voices) if (v.getNote() < droneId && (! target || v.getAge() < target->getAge())) target = &v;
         if (! target) for (auto& v : voices) if (! target || v.getAge() < target->getAge()) target = &v;
         const int play = juce::jlimit (0, 127, note + params.octave * 12);
         const bool percTrigger = held == 0;      // Percussion nur, wenn keine Taste gehalten wird
         lastBlock.p = params;                    // immer das aktuelle Modell (auch vor dem ersten Block)
         target->noteOn (note, play, vel, stamp, lastBlock, percTrigger);
         ++held;
+        if (! droneOn && params.model == ParamChoices::kPipe && PipeOrgan::world (params.variant).drone)
+            startDrones (vel);
+    }
+
+    /** Dudelsack-Bordun: Bass-A (A2), Tenor-A (A3) und leise Quinte (E3) – klingen, solange gespielt wird */
+    void startDrones (float vel)
+    {
+        static const int droneNotes[3] { 45, 57, 52 };
+        static const float droneGains[3] { 0.55f, 0.45f, 0.22f };
+        for (int k = 0; k < 3; ++k)
+        {
+            KeysVoice* d = nullptr;
+            for (auto& v : voices) if (! v.isActive()) { d = &v; break; }
+            if (! d) for (auto& v : voices) if (v.isReleasing() && (! d || v.getAge() < d->getAge())) d = &v;
+            if (! d) break;
+            ++stamp;
+            d->noteOn (droneId + k, droneNotes[k], vel, stamp, lastBlock, false);
+            d->makeDrone (droneGains[k]);
+        }
+        droneOn = true;
+    }
+
+    void stopDrones()
+    {
+        for (auto& v : voices)
+            if (v.isActive() && v.getNote() >= droneId) v.noteOff();
+        droneOn = false;
     }
 
     void noteOff (int note)
     {
         for (auto& v : voices)
             if (v.isActive() && ! v.isReleasing() && v.getNote() == note) { v.noteOff(); held = juce::jmax (0, held - 1); }
+        if (held == 0 && droneOn) stopDrones();
     }
 
     double sr = 44100.0;
@@ -1263,7 +1331,8 @@ private:
     juce::Random noiseRng { 777 };
     float bend = 0.0f, wheel = 0.0f, aftertouch = 0.0f, expression = 1.0f, wahEnv = 0.0f, regSmooth = -1.0f;
     double vibPhase = 0.0, tremPhase = 0.0, fxPhase = 0.0;
-    bool sustain = false, tailActive = false;
+    bool sustain = false, tailActive = false, droneOn = false;
+    static constexpr int droneId = 1000;     // eigene Nummern, damit Tasten die Borduns nicht beenden
     int held = 0;
     juce::uint64 stamp = 0;
     Leslie leslie;

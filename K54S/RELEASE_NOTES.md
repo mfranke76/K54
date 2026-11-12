@@ -1,5 +1,11 @@
 K-54 S · Keller54 · by Frank E. – BETA
 
+Neu in 1.5.0 – Dudelsack-Orgel und Spanische Trompeten (Beta):
+- Neue Orgelwelt „Dudelsack & Spanische Trompeten“: Chanter aus Regal, Krummhorn, Nasat und Terz, dazu Trompeta real 8' und Bajoncillo 4' (spanische Horizontaltrompeten)
+- Dudelsack-Bordun auf A (Bass-A, Tenor-A, leise Quinte) klingt von selbst, solange du spielst
+- Vorschlagsnoten wie beim Dudelsack (kurzes hohes G vor jedem Ton) – kommen automatisch
+- Neue Presets: Amazing Grace Dudelsack-Orgel, Dudelsack leise (Regal + Bordun), Spanische Trompeten (Trompeta real) – am besten in A-Dur spielen
+
 Neu in 1.4.0 – ANSICHT, so wie du es brauchst:
 - Knopf ANSICHT oben: 5 Farbschemata (Keller54, Neon, Studio, Kontrast, Ozean) oder eigene Farben mit Farbwähler (Hauptfarbe, Zweitfarbe, Akzent)
 - Farbige Oberfläche: jede Sektion mit eigener Akzentfarbe, Regenbogenlinie unter dem Kopf – oder schlicht wie bisher

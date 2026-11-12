@@ -194,7 +194,7 @@ namespace ParamChoices
     enum { kwOff = 0, kwLeslie, kwSwell, kwVibrato, kwRegister, kwTone };
     inline const juce::StringArray keysOctaves { "-2", "-1", "0", "+1", "+2" };
     inline const juce::StringArray talkSources { "Mod-Rad", "Huellkurve", "Aftertouch", "Auto (LFO)" };
-    inline constexpr int maxKeysVariants = 15;
+    inline constexpr int maxKeysVariants = 16;
 
     /** Orgelwelten der Pfeifenorgel – synthetisch nachempfunden, keine Aufnahmen */
     inline const juce::StringArray& organWorlds()
@@ -203,7 +203,7 @@ namespace ParamChoices
             u8 ("Paris Notre-Dame"), u8 ("Freiberg Silbermann"), u8 ("Leipzig Bach-Barock"), u8 ("Passau Dom"),
             u8 ("K\xc3\xb6ln Dom"), u8 ("Ulm M\xc3\xbcnster"), u8 ("Rom St. Peter"), u8 ("London Westminster"),
             u8 ("Haarlem St. Bavo"), u8 ("Wien Stephansdom"), u8 ("Hamburg Michel"), u8 ("Riga Dom"),
-            u8 ("Philadelphia Wanamaker"), u8 ("Theater-Orgel"), u8 ("Dorfkirche") };
+            u8 ("Philadelphia Wanamaker"), u8 ("Theater-Orgel"), u8 ("Dorfkirche"), u8 ("Dudelsack & Spanische Trompeten") };
         return w;
     }
 

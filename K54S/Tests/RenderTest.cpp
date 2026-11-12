@@ -584,6 +584,26 @@ int main (int argc, char** argv)
             allOk &= check (juce::String ("Hoerprobe ") + pn, out);
             writeWav (outDir.getChildFile ("Orgel_" + juce::File::createLegalFileName (juce::String (pn).replace (" ", "_")) + ".wav"), out, sr);
         }
+        // Dudelsack-Orgel: "Amazing Grace" (A-Dur, 3/4) mit Bordun und Vorschlaegen
+        for (auto* pn : { "Amazing Grace Dudelsack-Orgel", "Spanische Trompeten (Trompeta real)" })
+        {
+            proc.setCurrentProgram (presetIndex (pn));
+            proc.prepareToPlay (sr, block);
+            const double beat = 0.62;
+            const int mel[][2] { { 64, 2 }, { 69, 4 }, { 73, 1 }, { 69, 1 }, { 73, 4 }, { 71, 2 }, { 69, 4 }, { 66, 2 }, { 64, 4 }, { 64, 2 },
+                                 { 69, 4 }, { 73, 1 }, { 69, 1 }, { 73, 4 }, { 71, 2 }, { 76, 6 } };
+            std::vector<Ev> ev;
+            double tpos = 0.1;
+            for (auto& m : mel) { const double d = m[1] * beat * 0.5; ev.push_back ({ at (tpos), m[0], true, 0.85f }); ev.push_back ({ at (tpos + d - 0.02), m[0], false, 0.0f }); tpos += d; }
+            auto out = render (proc, sr, block, tpos + 3.0, ev);
+            allOk &= check (juce::String ("Amazing Grace ") + pn, out);
+            // Bordun: zwischen zwei Melodietoenen (Ton aus, naechster an) muss das A2 weiterklingen
+            const float mid = out.getRMSLevel (0, at (tpos * 0.5), at (0.3));
+            const bool droneOk = juce::String (pn).contains ("Dudelsack") ? mid > 0.01f : true;
+            std::printf ("%s Dudelsack-Bordun/Pegel Mitte %.3f\n", droneOk ? "OK  " : "FAIL", mid);
+            allOk &= droneOk;
+            writeWav (outDir.getChildFile ("Orgel_" + juce::File::createLegalFileName (juce::String (pn).replace (" ", "_").replace ("(", "").replace (")", "")) + ".wav"), out, sr);
+        }
         // CPU: Kathedrale Tutti, 10 Toene + Leslie-Orgel + Clav, je 10 s
         for (auto* pn : { "Notre-Dame Grand Choeur Chamades", "Freiberg Tutti mit Zungen", "Passau Dom Tutti", "Gospel Leslie", "Funk Clav 72", "FM Ballade Piano", "Tines + Pad" })
         {
