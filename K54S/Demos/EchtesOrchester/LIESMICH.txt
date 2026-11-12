@@ -1,0 +1,5 @@
+Echtes Orchester – Keller54 Echt-Sampler
+Blech und Streicher werden aus echten Aufnahmen gespielt (VSCO 2 Community Edition, CC0 – frei nutzbar, auch kommerziell).
+Melodie (Dudelsack-Orgel) und Glocken kommen weiter aus dem K-54 S.
+Benutzung: python3 k54sampler.py <midi> <spur> <instrument> <ziel.wav> [--section N --transpose X --pan P]
+Instrumente: trumpet horn trombone tuba violins violas celli contrabass
