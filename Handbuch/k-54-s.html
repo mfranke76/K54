@@ -1,0 +1,148 @@
+<!-- meta: title=Handbuch K-54 S | slug=k-54-s | version=1.4.0 (Beta) | kicker=Analog · Wavetable · Sample · Keys | lead=Der K-54 S ist der große Bruder des K-54: drei Oszillatoren mit Analog-, Wavetable-, Sample- und Flügel-Klängen, Mod-Matrix, Effekte, Harmonizer und eine zweite Klangebene KEYS mit Clav, E-Piano, Orgeln und mehr. -->
+
+<section id="schnellstart"><h2>Schnellstart</h2>
+<ol class="k54h-steps">
+<li>Plugin installieren (Hilfe: <a href="/installieren/">Installieren</a>) und die DAW neu starten. Der K-54 S ist eine <strong>Beta</strong> – Download nach Zustimmung im <a href="/beta-programm/">Beta-Programm</a>.</li>
+<li>In Logic: <strong>Instrument › AU-Instrumente › Keller54 › K-54 S</strong>. In anderen DAWs als VST3-Instrument unter Keller54.</li>
+<li>Oben ein <strong>Preset</strong> aus den Kategorien wählen (Piano, E-Piano &amp; Keys, Orgel, Vintage Mono, Analog Poly, Wavetable, Sample …).</li>
+<li>Durch die Reiter klicken: <strong>SYNTH · MOD · SAMPLE · FX · HARMONY · KEYS</strong>. Oben rechts liegen <strong>ANSICHT</strong>, <strong>FARBIG</strong> und <strong>UPDATE</strong>.</li>
+</ol>
+<p class="k54h-note">Formate: macOS AU, VST3 und App (Apple Silicon + Intel), Windows 10/11 VST3 und App (64 Bit). Das Fenster lässt sich von 70 bis 150 % skalieren (Ecke ziehen oder Größe wählen). <strong>Doppelklick</strong> auf einen Regler setzt ihn zurück.</p>
+</section>
+
+<section id="synth"><h2>SYNTH – Oszillatoren, Filter, Hüllkurven</h2>
+<h3>OSCILLATORS</h3>
+<p>3 Oszillatoren, jeder mit einem dieser Typen:</p>
+<table class="k54h-table">
+<tr><th>Typ</th><th>Was er macht</th></tr>
+<tr><td>Triangle, Saw, Square, Pulse</td><td>Klassische Analog-Wellenformen (Pulse mit Pulsbreite).</td></tr>
+<tr><td>Wavetable</td><td>Eine Tabelle aus vielen Wellenformen, durch die du mit <strong>WT Pos</strong> fährst. 13 Werks-Tabellen: Basic Shapes, PWM Sweep, Harmonics, Vocal, Digital FM, Sync Sweep, Organ Bars, Bell, Growl, Pipe Principal, Pipe Flute, Pipe Reed, E-Piano – plus <strong>USER</strong> (eigene Tabelle im Serum-Format mit 2048 Samples pro Frame, oder aus einem Sample erzeugt).</td></tr>
+<tr><td>Sample</td><td>Spielt ein geladenes oder aufgenommenes Sample (siehe <a href="#sample">SAMPLE</a>).</td></tr>
+<tr><td>Piano</td><td>Konzertflügel aus den Samples des Salamander Grand Piano V3.</td></tr>
+</table>
+<p>Je Oszillator: Fußlage 32'–2', Tonhöhe, Lautstärke; dazu Noise und Drift.</p>
+<h3>LADDER FILTER</h3>
+<p>4-Pol-Ladder-Filter mit <strong>Cutoff, Emphasis, Contour, Drive, Key Track</strong> und Velocity. Den Filtertyp (LP 24, LP 12, Band Pass, High Pass) wählst du im Reiter <a href="#fx">FX</a>.</p>
+<h3>CONTOURS und MOD</h3>
+<ul class="k54h-list">
+<li>ADSR-Hüllkurven für Filter und Lautstärke.</li>
+<li>LFO 1 (Tri, Saw, Square, S&amp;H) auf Tonhöhe und Filter.</li>
+<li>Voice Mode Mono, Legato oder Poly, Glide, Bend-Bereich.</li>
+</ul>
+</section>
+
+<section id="mod"><h2>MOD – Modulation</h2>
+<ul class="k54h-list">
+<li><strong>LFO 2 &amp; MOD ENV:</strong> ein zweiter LFO und eine eigene Modulations-Hüllkurve (Attack, Decay, Sustain, Release).</li>
+<li><strong>MOD MATRIX:</strong> 8 Plätze. Jeder verbindet eine <strong>Quelle</strong> mit einem <strong>Ziel</strong> und einer Stärke (auch negativ).</li>
+</ul>
+<table class="k54h-table">
+<tr><th>Quellen (14)</th><td>LFO 1, LFO 2, Filter Env, Amp Env, Mod Env, Velocity, Mod Wheel, Pitch Bend, Aftertouch, Key, Random, Breath (CC2), Expression (CC11)</td></tr>
+<tr><th>Ziele (20)</th><td>Pitch, Osc1/2/3 Pitch, Cutoff, Emphasis, Drive, Pulse Width, Volume, Pan, Detune, Noise, Sub, Osc1/2/3 Level, WT Pos 1/2/3, WT Pos All</td></tr>
+</table>
+<ul class="k54h-list">
+<li><strong>WHEELS &amp; TOUCH:</strong> Pitch- und Mod-Wheel werden angezeigt und lassen sich auch mit der Maus bedienen. Bend Up und Down getrennt; Mod-Wheel und Aftertouch direkt auf Vibrato, Cutoff und WT-Position.</li>
+</ul>
+</section>
+
+<section id="sample"><h2>SAMPLE – Laden, Aufnehmen, Bearbeiten</h2>
+<h3>Laden</h3>
+<ul class="k54h-list">
+<li><strong>LADEN</strong> oder eine Datei per Drag &amp; Drop aus Finder/Explorer oder DAW ins Fenster ziehen.</li>
+<li><strong>BROWSER:</strong> durchsucht Samples und Loops, z. B. Logic Apple Loops, Sound Library, Sample-Platten und eigene Ordner.</li>
+</ul>
+<h3>Aufnehmen (INPUT &amp; WT)</h3>
+<ul class="k54h-list">
+<li><strong>● REC</strong> nimmt vom Audio-Eingang auf (Mikrofon/Interface), mit <strong>AUTO-START</strong> beginnt die Aufnahme erst, wenn ein Signal kommt. Eingang: Stereo 1/2, Mono In 1, Mono In 2 oder Mono 1+2, mit Gain und Monitor.</li>
+<li><strong>→ WAVETABLE</strong> macht aus dem Sample eine eigene Wavetable (USER).</li>
+<li>Aufnahmen landen in <code>~/Music/Keller54/K-54 S Samples/</code>.</li>
+</ul>
+<h3>Editor wie in einer DAW</h3>
+<ul class="k54h-list">
+<li>Wellenform zoomen (Mausrad / Trackpad, + und −) und verschieben; Bereich mit der Maus auswählen (Doppelklick = alles).</li>
+<li><strong>ZUSCHNEIDEN, LÖSCHEN, STILLE, FADE IN/OUT, NORM</strong> (Normalisieren), <strong>REV</strong> (rückwärts), Rückgängig/Wiederholen (auch Cmd/Strg + Z).</li>
+<li>Schnitte landen auf Nulldurchgängen; das Original bleibt erhalten.</li>
+<li>Abspielen: <strong>Start, Ende, Loop</strong> (Aus, Loop, Ping-Pong) mit Loop-Start, Grundton, Key-Track, One-Shot und <strong>Sample Volume</strong> (−24 bis +24 dB, Übersteuerung wird rot angezeigt).</li>
+</ul>
+</section>
+
+<section id="fx"><h2>FX – Unison, Power und Effekte</h2>
+<h3>UNISON &amp; POWER</h3>
+<ul class="k54h-list">
+<li><strong>Unison</strong> 1, 2, 3, 4, 5 oder 7 Stimmen pro Ton mit <strong>Detune</strong> und <strong>Spread</strong> (Stereobreite) – für fette Leads und Supersaws.</li>
+<li><strong>Sub Osc</strong> (eine Oktave tiefer), <strong>Filter</strong>-Typ LP 24 / LP 12 / Band Pass / High Pass, <strong>Heat</strong> (Sättigung).</li>
+<li><strong>QUALITÄT:</strong> High oder Eco. Eco spart Rechenleistung, wenn viele Instanzen laufen.</li>
+</ul>
+<h3>EFFECTS</h3>
+<ul class="k54h-list">
+<li><strong>Chorus:</strong> Mix, Rate, Depth.</li>
+<li><strong>Delay:</strong> Mix, Feedback und Time im DAW-Tempo (1/32 bis 1 Takt, auch triolisch und punktiert).</li>
+<li><strong>Reverb:</strong> Send, Size, Damp, Level.</li>
+</ul>
+</section>
+
+<section id="harmony"><h2>HARMONY – Harmonizer</h2>
+<p>Der Harmonizer spielt zu jedem Ton automatisch weitere Töne dazu. Einschalten mit <strong>HARMONIE AN</strong> (auch als Knopf ♫ HARMONIE oben).</p>
+<ul class="k54h-list">
+<li><strong>Tonart</strong> (C bis H) und <strong>Skala:</strong> Dur, Moll, Dorisch, Mixolydisch, Harm. Moll, Pentatonik – die Töne bleiben leitereigen. Oder ein fester Akkord: <strong>Akkord Dur</strong> / <strong>Akkord Moll</strong>.</li>
+<li><strong>Stimmen:</strong> Terz, Quinte, Septime, None, Oktave +, Oktave − – beliebig kombinierbar.</li>
+<li><strong>Lage:</strong> eng (darüber), offen oder darunter. <strong>Lautstärke</strong> der Zusatzstimmen.</li>
+</ul>
+</section>
+
+<section id="keys"><h2>KEYS – zweite Klangebene</h2>
+<p>KEYS ist eine eigene Klangebene, die <strong>zusammen mit dem Synth</strong> spielt – oder allein (<strong>SYNTH AN</strong> ausschalten). Einschalten mit <strong>KEYS AN</strong>.</p>
+<table class="k54h-table">
+<tr><th>Modell</th><th>Varianten</th><th>Regler A / B</th></tr>
+<tr><td>Funk Clav</td><td>Brilliant, Treble, Medium, Soft, Brilliant + Medium</td><td>Damper / Pickup</td></tr>
+<tr><td>Tine Piano</td><td>Stage, Suitcase, Bright Tines, Mellow, Reed-Piano</td><td>Bark / Bell</td></tr>
+<tr><td>Tonewheel Organ</td><td>Zugriegel-Registrierungen (Jazz, Gospel, Volle Orgel …)</td><td>Percussion / Click</td></tr>
+<tr><td>Pipe Organ</td><td>15 Orgelwelten (siehe unten)</td><td>Register / Wind</td></tr>
+<tr><td>FM Piano</td><td>80er Ballade, Bright Tine, Soft Keys, Hard Funk</td><td>Index / Attack</td></tr>
+<tr><td>FM Bell</td><td>Röhrenglocken, Glas, Celesta, Marimba, Vibraphon</td><td>Index / Attack</td></tr>
+<tr><td>FM Bass</td><td>Solid, Punch, Pluck, Synth Growl</td><td>Index / Attack</td></tr>
+<tr><td>Blues Harp</td><td>Clean, Bullet Mic, Chromatisch, Hohle Hand</td><td>Growl / Bend</td></tr>
+</table>
+<p>Außerdem je Modell: <strong>Oktave</strong> (−2 bis +2), <strong>Lautstärke, Tone, Decay, Velocity, Drive</strong>.</p>
+<h3>KEYS-EFFEKT</h3>
+<ul class="k54h-list">
+<li>Effekt: Phaser, Tremolo, Auto-Pan, Chorus, Wah (Hüllkurve), Wah (Mod-Rad), Leslie – mit Amount und Rate. Gilt nur für die KEYS.</li>
+<li><strong>Mod-Rad</strong> der KEYS: Leslie langsam/schnell, Swell, Vibrato, Register oder Tone.</li>
+</ul>
+<h3>Pipe Organ – 15 Orgelwelten</h3>
+<p>Paris Notre-Dame, Freiberg Silbermann, Leipzig Bach-Barock, Passau Dom, Köln Dom, Ulm Münster, Rom St. Peter, London Westminster, Haarlem St. Bavo, Wien Stephansdom, Hamburg Michel, Riga Dom, Philadelphia Wanamaker, Theater-Orgel, Dorfkirche.</p>
+<ul class="k54h-list">
+<li>Notre-Dame, Freiberg, Leipzig, Passau, Köln und Hamburg sind nach den echten Dispositionen nachgebaut (seit 1.3.0), Barock-Welten mit historischer Stimmung.</li>
+<li>Register-Walze (Crescendo), Wind und automatisches Pedal unter C2.</li>
+<li>Alle Orgeln sind synthetisch nachempfunden – keine Aufnahmen der echten Instrumente.</li>
+</ul>
+<h3>TALKBOX (SYNTH)</h3>
+<p>Formt den Synth wie eine Stimme mit den Vokalen U-O-A-E-I. <strong>Mix, Formant, Rate</strong> und <strong>Vokal-Quelle:</strong> Mod-Rad, Hüllkurve, Aftertouch oder Auto (LFO).</p>
+</section>
+
+<section id="ansicht"><h2>ANSICHT – Farben und Oberfläche</h2>
+<ul class="k54h-list">
+<li>Knopf <strong>ANSICHT</strong>: 5 Farbschemata (Keller54, Neon, Studio, Kontrast, Ozean) oder <strong>Eigene Farben</strong> mit Farbwähler für Hauptfarbe, Zweitfarbe und Sektions-Akzent.</li>
+<li>Oberfläche <strong>Farbig</strong> (jede Sektion mit eigener Akzentfarbe, Regenbogenlinie) oder <strong>Schlicht</strong>; Schnellumschalter <strong>FARBIG</strong> oben.</li>
+<li>Eigene Ansichten unter einem Namen speichern und mit einem Klick wechseln. Die Ansicht gilt für alle Projekte.</li>
+<li>Die Stimmen-Anzeige (VOICES) steht unten in der Fußzeile.</li>
+</ul>
+</section>
+
+<section id="presets"><h2>Presets</h2>
+<ul class="k54h-list">
+<li>Rund 140 Werks-Presets in Untermenüs je Kategorie: Piano, E-Piano &amp; Keys, Orgel (Kirche, Drawbar, Harmonium), Kirchenorgeln der Welt, Soul Keys 70s, Tonewheel &amp; Leslie, FM Klassiker, Vintage Mono, Analog Poly, Wavetable, Sample-Vorlagen und mehr.</li>
+<li>Eigene Presets mit Kategorie speichern (inklusive Verweis auf Sample bzw. Wavetable) – unter <code>~/Music/Keller54/K-54 S Presets/&lt;Kategorie&gt;/</code>.</li>
+</ul>
+</section>
+
+<section id="update"><h2>UPDATE</h2>
+<p>Der Knopf <strong>UPDATE</strong> oben rechts wird gold, sobald es auf keller54.de eine neue Version gibt. Ein Klick lädt das Update, prüft es per Prüfsumme und startet den Installer. Einstellungen, Presets, Samples und DAW-Projekte bleiben erhalten. Ist der K-54 schon mit deinem Keller54-Konto verbunden, ist es der K-54 S automatisch auch.</p>
+</section>
+
+<section id="lizenzen"><h2>Hinweise und Lizenzen</h2>
+<ul class="k54h-list">
+<li>Flügel-Samples: <strong>Salamander Grand Piano V3</strong> von Alexander Holm, Lizenz CC BY 3.0.</li>
+<li>Beta-Version: Funktionen und Klänge können sich bis zur fertigen Version noch ändern. Bitte die <a href="/beta-programm/">Beta-Bedingungen</a> beachten.</li>
+</ul>
+</section>

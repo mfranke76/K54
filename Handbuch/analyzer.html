@@ -1,0 +1,141 @@
+<!-- meta: title=Handbuch K-54 Analyzer | slug=analyzer | version=1.6.0 (Beta) | kicker=Analyzer für Mix und Master | lead=Der K-54 Analyzer zeigt dir, wie dein Mix klingt: Spektrum, Lautheit, Pegel und Stereobild – und wie er sich gegenüber einem Referenz-Song schlägt. Für Einsteiger mit klaren Worten (EINFACH), für Profis mit allen Werkzeugen (PRO). -->
+
+<section id="schnellstart"><h2>Schnellstart</h2>
+<ol class="k54h-steps">
+<li>Plugin installieren (Hilfe: <a href="/installieren/">Installieren</a>) und die DAW neu starten.</li>
+<li>Den K-54 Analyzer als <strong>letztes Plugin auf den Master</strong> (Stereo-Ausgang) legen. Er verändert den Klang nicht – er misst nur.</li>
+<li>Song abspielen. Oben links siehst du das <strong>Spektrum</strong>, rechts <strong>Lautheit</strong> und <strong>Pegel</strong>.</li>
+<li>Einen fertigen Song, der dir gut gefällt, als <strong>Referenz</strong> in das Fenster ziehen (WAV, AIFF, FLAC, MP3 und weitere).</li>
+<li>Mit <strong>A/B</strong> zwischen deinem Mix und der Referenz umschalten – gleich laut, damit du ehrlich vergleichst.</li>
+</ol>
+<p class="k54h-note">Formate: macOS AU, VST3 und App (Apple Silicon + Intel), Windows 10/11 VST3 und App (64 Bit). Das Fenster lässt sich von 55 bis 150 % skalieren.</p>
+</section>
+
+<section id="einfach-pro"><h2>EINFACH und PRO</h2>
+<p>Oben im Kopf schaltest du zwischen zwei Arbeitsweisen um. Die Wahl gilt für alle Projekte.</p>
+<div class="k54h-two">
+<div><h3>EINFACH</h3><p>Zeigt nur das Wichtigste: Spektrum, Tonale Balance, Lautheit mit Ziel und eine <strong>EINSCHÄTZUNG</strong> in klaren Worten, z. B. „Lautheit passt zum Ziel.“ oder ein Tipp, welcher Frequenzbereich gegenüber der Referenz zu stark oder zu schwach ist.</p></div>
+<div><h3>PRO</h3><p>Alle Werkzeuge: Differenzkurve, Langzeit-Mittel, Kanalwahl (L+R / Links / Rechts / Side), FFT-Auflösung, Vektorskop mit Korrelation und Side/Mid, Short-Term max, Momentary max, PLR, Abhören in Mono/Side, Band-Solo und Messbericht.</p></div>
+</div>
+</section>
+
+<section id="spektrum"><h2>Spektrum</h2>
+<p>Das Spektrum zeigt, wie viel Energie dein Mix in jedem Frequenzbereich von <strong>20 Hz bis 20 kHz</strong> hat. Links die Bässe, rechts die Höhen. Mix und Referenz werden gleichzeitig gezeichnet und lassen sich einzeln ein- und ausschalten.</p>
+<table class="k54h-table">
+<tr><th>Einstellung</th><th>Was sie macht</th></tr>
+<tr><td>KURVE / BALKEN / SPEKTRO</td><td>Darstellung als leuchtende Kurve, als Terzband-Balken (LED) oder als Spektrogramm (Verlauf über die Zeit) mit Kurve darüber.</td></tr>
+<tr><td>NEIGUNG</td><td>0 / 3 / 4,5 / 6 dB pro Oktave. Gleicht aus, dass Musik von Natur aus zu den Höhen hin leiser wird. 4,5 dB ist ein guter Standard – ein ausgewogener Mix wirkt dann ungefähr „waagerecht“.</td></tr>
+<tr><td>TEMPO</td><td>Langsam, Mittel, Schnell oder Langzeit (Mittel über den ganzen Song).</td></tr>
+<tr><td>GLÄTTUNG</td><td>Aus, 1/12, 1/6 oder 1/3 Oktave. Mehr Glättung = ruhigere, leichter lesbare Kurve.</td></tr>
+<tr><td>HOLD</td><td>Hält die höchsten Werte fest.</td></tr>
+<tr><td>Spitzen zeigen</td><td>Markiert die 3 stärksten Spitzen mit ihrer Frequenz – praktisch, um Dröhnen oder Pfeifen zu finden.</td></tr>
+<tr><td>DIFFERENZ <span class="k54h-tag">PRO</span></td><td>Zeichnet Mix minus Referenz. Über der Mittellinie hat dein Mix mehr Energie als die Referenz, darunter weniger.</td></tr>
+<tr><td>KANAL <span class="k54h-tag">PRO</span></td><td>L+R (Mitte), nur Links, nur Rechts oder Side (das, was nur in der Stereobreite steckt).</td></tr>
+<tr><td>AUFLÖSUNG <span class="k54h-tag">PRO</span></td><td>Normal, Hoch, Sehr hoch – feinere Auflösung im Bass, dafür etwas träger.</td></tr>
+</table>
+<p class="k54h-note">Unten im Spektrum stehen die Namen der Frequenzbereiche (Sub, Bass, Mitten …), damit du weißt, wo du gerade hinschaust.</p>
+</section>
+
+<section id="tonale-balance"><h2>Tonale Balance</h2>
+<p>Die Tonale Balance fasst das Spektrum in <strong>6 Bereiche</strong> zusammen und vergleicht sie mit der Referenz – unabhängig davon, wie laut die beiden sind.</p>
+<table class="k54h-table">
+<tr><th>Bereich</th><th>Frequenzen</th><th>Was dort klingt</th></tr>
+<tr><td>Sub</td><td>20 – 60 Hz</td><td>Tiefster Bass, Kick-Druck, mehr fühlen als hören</td></tr>
+<tr><td>Bass</td><td>60 – 250 Hz</td><td>Bassgitarre, Synth-Bass, Wärme</td></tr>
+<tr><td>Untere Mitten</td><td>250 – 800 Hz</td><td>Fülle, aber auch „Mulm“ und Dröhnen</td></tr>
+<tr><td>Mitten</td><td>800 Hz – 2,5 kHz</td><td>Stimme, Gitarren, Durchsetzungskraft</td></tr>
+<tr><td>Präsenz</td><td>2,5 – 6 kHz</td><td>Deutlichkeit, Biss – zu viel wirkt anstrengend</td></tr>
+<tr><td>Höhen</td><td>6 – 20 kHz</td><td>Luft, Glanz, Becken, Zischlaute</td></tr>
+</table>
+<p>Dazu gibt der Analyzer einen <strong>Tipp in einem Satz</strong>, z. B. dass dein Mix in den unteren Mitten mehr Energie hat als die Referenz.</p>
+</section>
+
+<section id="lautheit"><h2>Lautheit (LUFS)</h2>
+<p>Gemessen wird nach <strong>EBU R128 / ITU BS.1770-4</strong> – so wie Streaming-Dienste und Sender messen.</p>
+<table class="k54h-table">
+<tr><th>Wert</th><th>Bedeutung</th></tr>
+<tr><td>Integrated</td><td>Durchschnittliche Lautheit über den ganzen gemessenen Zeitraum. Das ist der Wert, den Spotify &amp; Co. vergleichen.</td></tr>
+<tr><td>Short-Term</td><td>Lautheit der letzten 3 Sekunden.</td></tr>
+<tr><td>Momentary</td><td>Lautheit der letzten 0,4 Sekunden.</td></tr>
+<tr><td>LRA</td><td>Lautheitsumfang in LU: wie stark leise und laute Stellen auseinanderliegen. Klein = sehr gleichmäßig/komprimiert.</td></tr>
+<tr><td>True Peak max</td><td>Höchster echter Spitzenpegel (4-fach überabgetastet). Für Streaming nicht über −1 dBTP.</td></tr>
+<tr><td>Short-Term max, Momentary max, PLR <span class="k54h-tag">PRO</span></td><td>Höchstwerte und Peak-to-Loudness-Ratio (Abstand Spitze zu Lautheit, Maß für Dynamik).</td></tr>
+</table>
+<h3>Ziel-Lautheit</h3>
+<p>Wähle bei <strong>ZIEL</strong>, wofür du mischst. Der Analyzer zeigt dann den Abstand zum Ziel:</p>
+<ul class="k54h-list">
+<li>−14 LUFS – Spotify / YouTube</li>
+<li>−16 LUFS – Apple Music</li>
+<li>−23 LUFS – EBU R128 (Fernsehen)</li>
+<li>−24 LUFS – ATSC A/85 (US-Fernsehen)</li>
+<li>−9 LUFS – Club / laut</li>
+<li>Kein Ziel</li>
+</ul>
+<p><strong>RESET</strong> startet die Messung neu. Mit <strong>Auto-Reset bei Play</strong> passiert das automatisch, wenn du in der DAW auf Play drückst. Der <strong>VERLAUF</strong> zeigt die Lautheit über die Zeit.</p>
+</section>
+
+<section id="pegel"><h2>Pegel und Stereo</h2>
+<ul class="k54h-list">
+<li><strong>PEGEL:</strong> Spitzenpegel links und rechts. Klick auf die Anzeige setzt die gehaltenen Spitzen zurück.</li>
+<li><strong>Korrelation:</strong> +1 = mono-kompatibel, um 0 = sehr breit, unter 0 = Phasenprobleme (Teile löschen sich in Mono aus).</li>
+<li><strong>Vektorskop</strong> <span class="k54h-tag">PRO</span>: zeigt das Stereobild als Wolke. Senkrecht = Mitte, breit = viel Stereo. Dazu das Verhältnis Side/Mid.</li>
+</ul>
+</section>
+
+<section id="referenz"><h2>Referenz und A/B</h2>
+<p>Eine Referenz ist ein fertiger Song, an dem du dich orientierst. Der Analyzer misst ihn genauso wie deinen Mix.</p>
+<ol class="k54h-steps">
+<li>Bis zu <strong>4 Dateien</strong> in das Fenster ziehen oder bei REFERENZ laden – sie landen in den Slots 1–4. Ein <strong>Ladebalken</strong> zeigt Fortschritt und Arbeitsschritt (Datei lesen, Samplerate umrechnen, Lautheit messen, Spektrum berechnen).</li>
+<li>Mit <strong>A/B</strong> hörst du zwischen Mix und Referenz hin und her – ohne Knacken, mit kurzer Überblendung.</li>
+<li><strong>LAUTHEIT ANGLEICHEN</strong> bringt die Referenz auf die Lautheit deines Mixes. Wichtig: Lauter klingt immer „besser“ – nur gleich laut ist der Vergleich fair. Mit <strong>Referenz Gain</strong> (±24 dB) kannst du von Hand nachregeln.</li>
+<li><strong>DAW-SYNC</strong>: Die Referenz läuft mit dem Transport deiner DAW. Ohne Sync spielt sie frei mit PLAY/STOP.</li>
+<li><strong>LANGZEIT-MITTEL</strong> <span class="k54h-tag">PRO</span>: zeigt das Spektrum der Referenz über den ganzen Song – ideal als ruhige Vergleichskurve.</li>
+</ol>
+<p class="k54h-note">Die Referenz wird beim Speichern des DAW-Projekts gemerkt und beim nächsten Öffnen wieder geladen (solange die Datei noch am selben Ort liegt). <strong>ENTFERNEN</strong> leert den Slot.</p>
+</section>
+
+<section id="live"><h2>Live-Referenz (Sidechain)</h2>
+<p>Der Slot <strong>LIVE</strong> misst alles, was am <strong>Sidechain-Eingang</strong> ankommt, als Referenz – zum Beispiel eine andere Spur, einen externen Player oder eine App über ein virtuelles Audiogerät. A/B, Angleichen, Tonale Balance, Differenzkurve und Lautheitswerte funktionieren wie bei einer Datei. Es wird nichts aufgenommen oder gespeichert.</p>
+<table class="k54h-table">
+<tr><th>DAW</th><th>So verbindest du den Sidechain</th></tr>
+<tr><td>Logic Pro</td><td>Oben rechts im Plugin-Fenster bei „Side Chain“ eine Spur, einen Bus oder einen Eingang wählen.</td></tr>
+<tr><td>Ableton Live</td><td>Im Gerät den Sidechain-Bereich aufklappen und die Quelle wählen.</td></tr>
+<tr><td>Cubase</td><td>Im Plugin-Fenster Sidechain aktivieren und eine Spur dorthin senden.</td></tr>
+</table>
+<p class="k54h-note">Streaming-Apps wie Spotify oder Apple Music lassen sich wegen ihres Kopierschutzes nicht direkt einspeisen. Ohne Verbindung zeigt der Analyzer „Kein Sidechain verbunden“.</p>
+</section>
+
+<section id="abhoeren"><h2>Abhören <span class="k54h-tag">PRO</span></h2>
+<ul class="k54h-list">
+<li><strong>ABHÖREN:</strong> Stereo, Mono oder Side. In Mono hörst du, ob etwas verschwindet; in Side hörst du nur die Stereo-Anteile.</li>
+<li><strong>Band-Solo:</strong> nur Bass (unter 150 Hz), nur Mitten (150 Hz – 5 kHz) oder nur Höhen (über 5 kHz).</li>
+</ul>
+<p class="k54h-warn">Solange Mono, Side oder ein Band-Solo aktiv ist, leuchtet eine <strong>orange Warnung</strong>. Vor dem Export wieder auf Stereo / Voller Bereich stellen – sonst hörst (und exportierst) du nicht den ganzen Mix.</p>
+</section>
+
+<section id="ansicht"><h2>ANSICHT – alles umstellbar</h2>
+<p>Über den Knopf <strong>ANSICHT</strong> stellst du den Analyzer so ein, wie du ihn brauchst. Die Ansicht gilt für alle Projekte.</p>
+<ul class="k54h-list">
+<li><strong>Farbschema:</strong> Keller54, Neon, Studio, Kontrast, Ozean oder <strong>Eigene Farben</strong> (Farbwähler für Mix, Referenz, Differenzkurve und Akzent der Felder).</li>
+<li><strong>Spektrum-Farbe:</strong> Themenfarbe oder Regenbogen (Bass rot bis Höhen violett). <strong>Oberfläche:</strong> Farbig oder Schlicht.</li>
+<li><strong>Darstellung:</strong> dB-Bereich, Linienstärke, Füllung, Raster, Spitzen zeigen.</li>
+<li><strong>Pegel:</strong> LED Ampel, LED Themenfarbe oder Balken glatt; Bereich 60 / 48 / 24 dB; Peak-Hold 1 s, 3 s oder bis Klick.</li>
+<li><strong>Felder ein/aus:</strong> Tonale Balance, Verlauf/Stereo, Lautheit, Pegel – das Spektrum wird automatisch größer.</li>
+<li><strong>Ansichten speichern:</strong> eigene Ansicht unter einem Namen sichern. Fertig dabei: Mixing, Mastering, Spektrogramm groß, Nur Spektrum, Klassisch.</li>
+<li><strong>Schnellumschalter</strong> direkt im Spektrum-Feld: Ansicht wählen, KURVE / BALKEN / SPEKTRO, FARBIG.</li>
+</ul>
+</section>
+
+<section id="bericht"><h2>Messbericht <span class="k54h-tag">PRO</span></h2>
+<p>Mit <strong>BERICHT</strong> speicherst du alle Messwerte (Lautheit, True Peak, LRA, PLR, Tonale Balance, Referenz) als Textdatei – praktisch zum Abheften oder um einem Kunden zu zeigen, wo der Master steht.</p>
+</section>
+
+<section id="tipps"><h2>Tipps für den Alltag</h2>
+<ul class="k54h-list">
+<li>Erst <strong>hören</strong>, dann schauen. Der Analyzer bestätigt oder erklärt, was du hörst – er ersetzt deine Ohren nicht.</li>
+<li>Referenzen aus <strong>deinem Genre</strong> wählen. Ein Metal-Song ist keine gute Referenz für eine Ballade.</li>
+<li>Vor dem Vergleich immer <strong>Lautheit angleichen</strong>.</li>
+<li>Für Streaming reicht meist −14 LUFS bei maximal −1 dBTP True Peak. Lauter bringt dort nichts, weil der Dienst ohnehin leiser stellt.</li>
+<li>Viel CPU? Auflösung auf Normal und Spektrogramm aus.</li>
+</ul>
+</section>

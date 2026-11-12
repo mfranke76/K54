@@ -1,0 +1,160 @@
+<!-- meta: title=Handbuch K-54 | slug=k-54 | version=1.5.1 | kicker=Ladder-Synthesizer, Looper und Drum-Computer | lead=Der K-54 ist ein analog inspirierter Synthesizer im Geist der klassischen 70er-Monosynths – mit 4-Spur-Looper, Drum-Computer, Step-Sequencer und Einzelausgängen. Hier findest du alles, was du zum Loslegen brauchst. -->
+
+<section id="schnellstart"><h2>Schnellstart</h2>
+<ol class="k54h-steps">
+<li>Plugin installieren (Hilfe: <a href="/installieren/">Installieren</a>) und die DAW neu starten.</li>
+<li>In Logic: <strong>Instrument › AU-Instrumente › Keller54 › K-54</strong>. In Ableton, Cubase oder Bitwig erscheint er als VST3-Instrument unter Keller54.</li>
+<li>Oben rechts ein <strong>Preset</strong> wählen und mit <code>&lt;</code> <code>&gt;</code> durchblättern.</li>
+<li>Spielen und an <strong>Cutoff</strong> und <strong>Emphasis</strong> drehen – das sind die wichtigsten Regler.</li>
+</ol>
+<p class="k54h-note">Formate: macOS AU, VST3 und App (Apple Silicon + Intel), Windows 10/11 VST3 und App (64 Bit). <strong>Doppelklick</strong> auf einen Regler setzt ihn auf den Grundwert zurück.</p>
+<p>Oben gibt es die Reiter <strong>SYNTH · LOOPER · DRUMS · SEQ · OUTS</strong> und den Knopf <strong>UPDATE</strong>.</p>
+</section>
+
+<section id="synth"><h2>SYNTH – Klangerzeugung</h2>
+<p>Der Signalweg ist wie bei einem klassischen Analog-Synth: <strong>Oszillatoren → Mixer → Ladder-Filter → Verstärker</strong>, gesteuert von zwei Hüllkurven und einem LFO.</p>
+<h3>OSCILLATORS</h3>
+<ul class="k54h-list">
+<li>3 Oszillatoren, je mit Wellenform <strong>Triangle, Saw, Square, Pulse</strong> und Fußlage <strong>32' bis 2'</strong> (32' = zwei Oktaven tiefer, 2' = zwei Oktaven höher, 8' = normal).</li>
+<li>Osc 2 und 3 mit <strong>Tune ±7 Halbtöne</strong> – leicht verstimmt ergibt das den typischen fetten Schwebungsklang, auf 7 (Quinte) Akkord-Leads.</li>
+<li><strong>Mixer:</strong> Lautstärke je Oszillator und <strong>Noise</strong> (Rauschen). <strong>Pulse Width</strong> regelt die Pulsbreite der Pulse-Welle.</li>
+<li><strong>Drift:</strong> leichte, zufällige Verstimmung wie bei echter Analog-Hardware.</li>
+</ul>
+<h3>LADDER FILTER</h3>
+<ul class="k54h-list">
+<li>24-dB-Tiefpass im Stil des klassischen Ladder-Filters.</li>
+<li><strong>Cutoff:</strong> Grenzfrequenz – zu = dumpf, auf = hell.</li>
+<li><strong>Emphasis:</strong> Resonanz; ganz aufgedreht pfeift das Filter selbst (Selbstoszillation).</li>
+<li><strong>Contour:</strong> wie stark die Filter-Hüllkurve den Cutoff öffnet.</li>
+<li><strong>Drive:</strong> Sättigung vor dem Filter für mehr Schmutz und Druck.</li>
+<li><strong>Key Track:</strong> höhere Töne öffnen das Filter weiter. <strong>Vel&gt;Filter:</strong> fester Anschlag = heller.</li>
+</ul>
+<h3>CONTOURS (Hüllkurven)</h3>
+<ul class="k54h-list">
+<li><strong>FILTER:</strong> F Attack, F Decay, F Sustain, F Release – steuert den Filterverlauf jedes Tons.</li>
+<li><strong>LOUDNESS:</strong> Attack, Decay, Sustain, Release – steuert den Lautstärkeverlauf.</li>
+<li>Kurzes Decay + niedriges Sustain = Pluck/Bass. Langes Attack + Release = Pad.</li>
+</ul>
+<h3>MOD, LFO und PLAY</h3>
+<ul class="k54h-list">
+<li><strong>LFO:</strong> Wellenform Tri, Saw, Square oder S&amp;H (Sample &amp; Hold), <strong>LFO Rate</strong>, <strong>LFO&gt;Pitch</strong> (Vibrato) und <strong>LFO&gt;Filter</strong> (Wah-Bewegung). Das <strong>Modrad</strong> gibt Vibrato dazu.</li>
+<li><strong>Voice Mode:</strong> Mono, Legato (8 Stimmen) oder Poly. <strong>Glide:</strong> Gleiten zwischen den Tönen.</li>
+<li><strong>Bend Range:</strong> 1–12 Halbtöne für das Pitch-Bend-Rad. <strong>Vel&gt;Amp:</strong> Anschlagstärke auf Lautstärke. Sustain-Pedal wird unterstützt.</li>
+<li><strong>OUTPUT / Volume:</strong> Gesamtlautstärke.</li>
+</ul>
+</section>
+
+<section id="presets"><h2>Presets</h2>
+<ul class="k54h-list">
+<li>34 Werks-Presets in den Kategorien Bass, Lead, Brass, Pad, Keys und FX – Menü oben rechts.</li>
+<li>Eigene Presets: <strong>SAVE</strong> › Namen eingeben. Gespeichert werden sie unter <code>~/Music/Keller54/K-54 Presets/</code> und erscheinen im Menü unter USER.</li>
+<li>Synth-Presets ändern Looper, Drums, Sequencer und Ausgänge nicht.</li>
+</ul>
+</section>
+
+<section id="looper"><h2>LOOPER</h2>
+<p>4 Loop-Spuren, taktgenau und automatisch synchron. Jede Spur nimmt den K-54, einen externen Audio-Eingang oder beides auf.</p>
+<h3>Quelle pro Spur</h3>
+<ul class="k54h-list">
+<li><strong>SYNTH</strong> – nur der Klang des K-54</li>
+<li><strong>INPUT</strong> – nur der Audio-Eingang (Mikrofon, Gitarre, Drumcomputer über dein Interface)</li>
+<li><strong>SYNTH + IN</strong> – beides zusammen</li>
+</ul>
+<h3>Bedienung pro Spur (wie ein Looper-Pedal)</h3>
+<ol class="k54h-steps">
+<li><strong>REC</strong> – die Aufnahme startet am nächsten Taktanfang (Ring blinkt rot = ARMED). Läuft noch nichts, startet der interne Takt sofort.</li>
+<li>Nach der eingestellten <strong>Loop Length</strong> (1, 2, 4 oder 8 Takte) wechselt die Spur automatisch auf <strong>PLAY</strong>.</li>
+<li>Haupttaste erneut: <strong>OVERDUB</strong> (orange) – weitere Schichten dazuspielen. Nochmal: zurück auf PLAY.</li>
+<li><strong>STOP / START</strong> schaltet die Spur stumm bzw. wieder an, <strong>CLEAR</strong> löscht sie. <strong>STOP ALL / CLEAR ALL</strong> wirken auf alle Spuren.</li>
+</ol>
+<p>Der Reiter LOOPER leuchtet rot, solange aufgenommen wird – auch wenn du gerade im SYNTH-Reiter bist.</p>
+<h3>INPUT-Bereich</h3>
+<ul class="k54h-list">
+<li>Pegelanzeige L/R (gelb = gut, orange = laut, rot = kurz vor Übersteuerung).</li>
+<li><strong>CHANNELS:</strong> Stereo 1/2, Mono In 1, Mono In 2 oder Mono 1+2. <strong>GAIN:</strong> ±24 dB. <strong>MONITOR:</strong> Eingang live mithören (in Logic aus lassen – Logic hört selbst mit).</li>
+<li><strong>App:</strong> Options › Audio/MIDI Settings › Interface als Input wählen; beim ersten Start auf <strong>Unmute</strong> klicken.</li>
+<li><strong>Logic:</strong> oben rechts im Plugin-Fenster bei <strong>Side Chain</strong> die Spur bzw. den Eingang wählen.</li>
+</ul>
+<h3>Tempo und Takt</h3>
+<ul class="k54h-list">
+<li>In einer DAW gilt <strong>immer das DAW-Tempo</strong> und die Taktart – auch wenn die DAW steht. Stoppt die DAW, pausieren die Loops.</li>
+<li>Kommt eine externe <strong>MIDI-Clock</strong>, folgt der K-54 ihr (Start, Stop, Continue).</li>
+<li>Sonst läuft der interne Takt mit dem Tempo-Regler; <strong>CLICK</strong> schaltet ein Metronom ein.</li>
+</ul>
+<h3>Fernsteuerung per MIDI-CC (Wert ≥ 64 = Taste)</h3>
+<table class="k54h-table">
+<tr><th>CC</th><th>Funktion</th></tr>
+<tr><td>102–105</td><td>Haupttaste Spur 1–4 (REC / OVERDUB / PLAY)</td></tr>
+<tr><td>106–109</td><td>STOP/START Spur 1–4</td></tr>
+<tr><td>110</td><td>interner Takt Start/Stop</td></tr>
+<tr><td>111</td><td>STOP ALL</td></tr>
+</table>
+<p class="k54h-note">Die Loops werden noch nicht mit dem Projekt gespeichert. Maximale Länge 40 Sekunden pro Spur (8 Takte ab ca. 48 BPM). Ändert sich das Tempo nach der Aufnahme, wird der Loop wie ein Tonband gestreckt – die Tonhöhe ändert sich mit.</p>
+</section>
+
+<section id="drums"><h2>DRUMS – Drum-Computer</h2>
+<p>8 analog modellierte, komplett synthetische Stimmen: <strong>Kick, Snare, Clap, Closed Hat, Open Hat, Tom Low, Tom High, Cowbell</strong>.</p>
+<ul class="k54h-list">
+<li>Pro Stimme: <strong>Level, Tune</strong> (±12 Halbtöne), <strong>Decay, Tone, Pan, M</strong> (stumm), <strong>OUT</strong> (eigener Ausgang).</li>
+<li>16-Schritt-Raster: Klick = an → Akzent (heller, mit Punkt) → aus.</li>
+<li>Die Closed Hat schneidet die Open Hat ab – wie bei den Klassikern.</li>
+</ul>
+<h3>Per MIDI spielen (Kanal 10)</h3>
+<table class="k54h-table">
+<tr><th>Note</th><th>Klang</th></tr>
+<tr><td>36</td><td>Kick</td></tr>
+<tr><td>38</td><td>Snare</td></tr>
+<tr><td>39</td><td>Clap</td></tr>
+<tr><td>42 / 46</td><td>Closed Hat / Open Hat</td></tr>
+<tr><td>41, 43, 45</td><td>Tom Low</td></tr>
+<tr><td>47, 48, 50</td><td>Tom High</td></tr>
+<tr><td>56</td><td>Cowbell</td></tr>
+</table>
+<p class="k54h-note">Kanal 10 erreicht den Synth nicht – du kannst also Drums und Synth über verschiedene Kanäle gleichzeitig spielen.</p>
+</section>
+
+<section id="seq"><h2>SEQ – Step-Sequencer</h2>
+<ul class="k54h-list">
+<li><strong>8 Patterns A–H</strong>, Wechsel jeweils am nächsten Takt. <strong>COPY</strong> kopiert ins nächste Pattern, <strong>CLEAR</strong> leert.</li>
+<li><strong>PLAY</strong> startet den internen Takt. In der DAW läuft der Sequencer automatisch mit dem Transport („DAW SYNC“), mit externer MIDI-Clock ebenso („MIDI SYNC“).</li>
+<li>Drum-Länge und Synth-Länge getrennt (1–16 Schritte) – so entstehen Polyrhythmen. <strong>SWING</strong> 50–80 %.</li>
+<li>Synth-Sequencer: 16 Schritte, Ton pro Schritt (ziehen, Mausrad, Doppelklick = Grundton), <strong>ACCENT</strong>, <strong>SLIDE</strong> (mit Glide gleitet der Ton wie bei einer 303), <strong>ROOT</strong> = Grundton, <strong>GATE</strong> = Notenlänge.</li>
+<li>Ab Werk: A Funk, B Four-on-the-floor, C Breakbeat, D Acid. Drums und Synth-Sequencer sind beim Laden aus – mit <strong>DRUMS ON</strong> / <strong>SEQ ON</strong> einschalten.</li>
+<li>Patterns werden mit dem DAW-Projekt gespeichert.</li>
+</ul>
+</section>
+
+<section id="outs"><h2>OUTS – Einzelausgänge</h2>
+<p>14 Stereo-Ausgänge: <strong>Main</strong>, Synth, Kick, Snare, Clap, Closed Hat, Open Hat, Tom Low, Tom High, Cowbell, Loop 1–4. Alles liegt standardmäßig auf Main; <strong>SEPARAT</strong> (bzw. OUT bei den Drums) legt eine Quelle auf ihren eigenen Ausgang. Ist dieser in der DAW nicht aktiv, bleibt der Klang automatisch auf Main (roter Punkt im OUTS-Reiter).</p>
+<table class="k54h-table">
+<tr><th>DAW</th><th>So nutzt du die Ausgänge</th></tr>
+<tr><td>Logic Pro</td><td>K-54 als <em>Multi-Output</em> laden (AU-Instrumente › Keller54 › K-54 › Multi Output), im Mixer beim K-54 auf „+“ klicken.</td></tr>
+<tr><td>Ableton Live</td><td>Neue Audiospur, „Audio From“ = K-54-Spur, darunter den Ausgang wählen, Monitor „In“.</td></tr>
+<tr><td>Cubase</td><td>Im Instrument-Rack beim K-54 die Ausgänge aktivieren.</td></tr>
+<tr><td>Bitwig</td><td>Im Gerät bei den Ausgängen „+“ – jeder Ausgang wird eine eigene Spur.</td></tr>
+</table>
+</section>
+
+<section id="a61"><h2>Komplete Kontrol / A61</h2>
+<ol class="k54h-steps">
+<li>Komplete Kontrol öffnen › <strong>Preferences › Plug-ins</strong> › „Rescan“.</li>
+<li>K-54 unter den Drittanbieter-Plugins (Keller54) aktivieren und laden.</li>
+</ol>
+<p>Die 8 Drehregler sind seitenweise belegt:</p>
+<table class="k54h-table">
+<tr><th>Seite</th><th>Regler 1–8</th></tr>
+<tr><td>1 Performance</td><td>Cutoff · Emphasis · Contour · Drive · Attack · Decay · Release · Glide</td></tr>
+<tr><td>2 Filter-Kontur</td><td>F Attack · F Decay · F Sustain · F Release · Sustain · Key Track · Vel&gt;Filter · Volume</td></tr>
+<tr><td>3 Oszillatoren</td><td>Osc1 Wave · Osc1 Range · Osc2 Wave · Osc2 Range · Osc2 Tune · Osc3 Wave · Osc3 Range · Osc3 Tune</td></tr>
+<tr><td>4 Mixer / LFO</td><td>Osc1 Level · Osc2 Level · Osc3 Level · Noise · Pulse Width · LFO Rate · LFO&gt;Pitch · LFO&gt;Filter</td></tr>
+<tr><td>5 Spielweise</td><td>LFO Wave · Voice Mode · Bend Range · Vel&gt;Amp · Drift · Loop Tempo · Loop Length · Loop Click</td></tr>
+<tr><td>6 Looper</td><td>Loop 1–4 Volume · Loop 1–4 Source</td></tr>
+<tr><td>7 Input</td><td>Input Channels · Input Gain · Input Monitor</td></tr>
+<tr><td>danach</td><td>Pattern, Sequencer, Drums (je Stimme Level/Tune/Decay/Tone/Pan/Mute/Out), Ausgänge</td></tr>
+</table>
+<p class="k54h-note">Modrad = Vibrato, Pitch-Bend und Sustain-Pedal werden unterstützt.</p>
+</section>
+
+<section id="update"><h2>UPDATE</h2>
+<p>Der Knopf <strong>UPDATE</strong> oben rechts wird gold, sobald es auf keller54.de eine neue Version gibt. Beim ersten Mal verbindest du den K-54 einmal im Browser mit deinem Keller54-Konto; danach lädt er die passende Version für Mac oder Windows, prüft sie und startet den Installer. Deine Presets und Projekte bleiben erhalten – und die Rückfragen von macOS/Windows beim Download entfallen.</p>
+</section>
