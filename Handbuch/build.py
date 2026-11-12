@@ -121,7 +121,8 @@ def manual_page(meta, body, toc):
            f'<div class="k54h-doc">{body}</div>'
            f'<p class="k54h-note">Fragen oder ein Fehler im Handbuch? Schreib mir an <a href="mailto:info@keller54.de">info@keller54.de</a> – Frank E.</p></div>')
     name = meta["title"].replace("Handbuch ", "")
-    return wrap(hero(meta["title"], meta["kicker"], meta["lead"]) + "\n\n" + section(doc))
+    h1 = re.sub(r"K-54( S)?", lambda m: f'<span style="white-space:nowrap">{m.group(0)}</span>', meta["title"])
+    return wrap(hero(h1, meta["kicker"], meta["lead"]) + "\n\n" + section(doc))
 
 
 def overview(entries):
