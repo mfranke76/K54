@@ -129,6 +129,47 @@ int main (int argc, char** argv)
     proc.setPlayConfigDetails (2, 2, sr, block);
     auto at = [&] (double t) { return (int) (t * sr); };
     bool allOk = true;
+
+    // ---- Werkzeug: eine Spur einer MIDI-Datei mit einem Preset rendern (wie in der DAW)
+    //      K55Test <out> midi <datei.mid> <spurnummer> "<Preset>" <ziel.wav>
+    if (argc > 6 && juce::String (argv[2]) == "midi")
+    {
+        juce::MidiFile mf;
+        juce::FileInputStream in (juce::File { juce::String (argv[3]) });
+        if (! in.openedOk() || ! mf.readFrom (in)) { std::printf ("MIDI nicht lesbar\n"); return 1; }
+        mf.convertTimestampTicksToSeconds();
+        const int tr = juce::String (argv[4]).getIntValue();
+        const auto* seq = mf.getTrack (tr);
+        if (seq == nullptr) { std::printf ("Spur fehlt\n"); return 1; }
+        int prog = -1;
+        for (int i = 0; i < proc.getNumPrograms(); ++i) if (proc.getProgramName (i) == juce::String (juce::CharPointer_UTF8 (argv[5]))) prog = i;
+        if (prog < 0) { std::printf ("Preset nicht gefunden: %s\n", argv[5]); return 1; }
+        proc.setCurrentProgram (prog);
+        proc.prepareToPlay (sr, block);
+        const double len = mf.getLastTimestamp() + 4.0;
+        const int total = (int) (len * sr) / block * block + block;
+        juce::AudioBuffer<float> out (2, total), buf (2, block);
+        int idx = 0;
+        for (int pos = 0; pos < total; pos += block)
+        {
+            buf.clear();
+            juce::MidiBuffer midi;
+            while (idx < seq->getNumEvents())
+            {
+                const auto& m = seq->getEventPointer (idx)->message;
+                const int s = (int) (m.getTimeStamp() * sr);
+                if (s >= pos + block) break;
+                if (m.isNoteOnOrOff() || m.isController() || m.isPitchWheel())
+                    midi.addEvent (m, juce::jlimit (0, block - 1, s - pos));
+                ++idx;
+            }
+            proc.processBlock (buf, midi);
+            for (int ch = 0; ch < 2; ++ch) out.copyFrom (ch, pos, buf, ch, 0, block);
+        }
+        writeWav (juce::File { juce::String (argv[6]) }, out, sr);
+        std::printf ("gerendert: Spur %d mit \"%s\", %.1f s, Spitze %.3f\n", tr, argv[5], len, out.getMagnitude (0, total));
+        return 0;
+    }
     {
         juce::SharedResourcePointer<PianoSet> pn;
         const auto t0 = juce::Time::getMillisecondCounter();

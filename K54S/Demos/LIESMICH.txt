@@ -1,0 +1,20 @@
+Amazing Grace – Keller54 Orchester (K-54 S 1.5.0)
+=================================================
+Tempo 66 BPM, 3/4-Takt, A-Dur, 2 Strophen (ca. 90 s).
+
+So geht es in Logic oder Bitwig:
+1. Amazing_Grace_Keller54_Orchester.mid in ein leeres Projekt ziehen
+   (Logic fragt nach dem Tempo: "Ja" = 66 BPM übernehmen).
+2. Auf jede Spur den K-54 S legen und dieses Preset wählen:
+
+   Spur 1  Melodie Dudelsack-Orgel      -> Amazing Grace Dudelsack-Orgel   (Strophe 1)
+   Spur 2  Melodie Spanische Trompeten  -> Spanische Trompeten (Trompeta real)   (Strophe 2)
+   Spur 3  Streicher                    -> Velvet Strings
+   Spur 4  Blech                        -> Eight Voice Brass   (nur Strophe 2)
+   Spur 5  Bass                         -> Super Poly Strings
+   Spur 6  Glocken                      -> FM Tubular Bells    (nur Strophe 2)
+
+3. Lautstärken grob wie in der Hörprobe: Melodie 0 dB, Streicher -7 dB,
+   Blech -5 dB, Bass -2 dB, Glocken -2 dB.
+
+Die Melodie ist das Kirchenlied "Amazing Grace" (New Britain, gemeinfrei).
