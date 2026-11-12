@@ -1,0 +1,21 @@
+Amazing Grace – Keller54 Trance (128 BPM, 4/4, A-Dur, ca. 90 s)
+================================================================
+Aufbau: Intro (Takt 1-8) · Breakdown mit Dudelsack-Orgel (9-24) · Build mit
+Snare-Wirbel (25-28) · Drop mit Super-Saw-Lead (29-44) · Outro (45-48)
+
+In Logic oder Bitwig: MIDI-Datei ins Projekt ziehen (Tempo 128 übernehmen), dann:
+
+  Drums (Kanal 10, General MIDI) -> beliebiges Drum-Kit, z. B. ein 909-Kit
+    Kick 36 · Clap 39 · HiHat zu 42 · HiHat offen 46 · Snare-Wirbel 38 · Crash 49
+  Bass Offbeat     -> K-54 S „Fat Three Bass“
+  Pad              -> K-54 S „Slow Sweep Pad“      FX: Hall 60 %, Größe 92 %
+  Pluck Arp        -> K-54 S „Hyper Pluck“         FX: Hall 45 %, Delay 25 %
+  Lead Breakdown   -> K-54 S „Amazing Grace Dudelsack-Orgel“   FX: Hall 70 %, Größe 97 %
+  Lead Drop        -> K-54 S „Super Saw Wave“      FX: Hall 50 %, Größe 90 %, Delay 22 %
+
+Für das typische Trance-„Pumpen“: auf Bass, Pad, Pluck und Lead einen Kompressor
+mit Sidechain von der Kick legen (oder in Bitwig: Tool „Sidechain“ / in Logic:
+Kompressor › Side Chain › Kick-Spur).
+
+Hinweis: In der Hörprobe sind die Drums selbst gebaut (der K-54 S hat keine
+Drums); in der DAW spielt dein Drum-Kit die Drum-Spuren.

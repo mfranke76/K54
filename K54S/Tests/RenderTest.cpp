@@ -145,6 +145,12 @@ int main (int argc, char** argv)
         for (int i = 0; i < proc.getNumPrograms(); ++i) if (proc.getProgramName (i) == juce::String (juce::CharPointer_UTF8 (argv[5]))) prog = i;
         if (prog < 0) { std::printf ("Preset nicht gefunden: %s\n", argv[5]); return 1; }
         proc.setCurrentProgram (prog);
+        // weitere Argumente: param=wert (echter Wert, z. B. revSend=0.6) - wie Regler in der DAW
+        for (int a = 7; a < argc; ++a)
+        {
+            const juce::String kv (argv[a]);
+            if (kv.contains ("=")) setP (proc, kv.upToFirstOccurrenceOf ("=", false, false).toRawUTF8(), kv.fromFirstOccurrenceOf ("=", false, false).getFloatValue());
+        }
         proc.prepareToPlay (sr, block);
         const double len = mf.getLastTimestamp() + 4.0;
         const int total = (int) (len * sr) / block * block + block;
