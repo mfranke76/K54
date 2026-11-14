@@ -1,0 +1,27 @@
+K-54 D · Keller54 · by Frank E.
+==============================
+Drumcomputer: 12 Spuren, 8 bis 32 Steps, synchron zur DAW.
+
+INSTALLIEREN
+1. DAW schließen (Ableton, Cubase, Bitwig, FL Studio ...).
+2. Doppelklick auf "K-54-D-<Version>-Setup.exe" und den Schritten folgen.
+   Meldet Windows "Der Computer wurde durch Windows geschützt":
+   auf "Weitere Informationen" > "Trotzdem ausführen" klicken.
+
+Installiert werden:
+- VST3:  C:\Programme\Gemeinsame Dateien\VST3\K-54 D.vst3
+- App:   C:\Programme\Keller54\K-54 D\K-54 D.exe (Startmenü > Keller54)
+
+IN DER DAW
+Plugins neu scannen lassen, dann bei den Instrumenten
+"Keller54 > K-54 D" laden. Preset wählen, Play drücken.
+
+BEDIENUNG
+Klick = Step an/aus, Shift + ziehen oder Mausrad = lauter/leiser,
+Rechtsklick = Lautstärke und Wirbel. Unter dem Raster: Lautstärke
+pro Step der gewählten Spur. STEPS 8-32, RASTER 1/8 bis 1/32 und Triolen.
+PATTERN A-D wechseln am Pattern-Ende (MIDI C0-D#0).
+SOUND: Modell wählen oder Sample laden/hineinziehen.
+
+Eigene Presets: Dokumente\..\Musik\Keller54\K-54 D Presets.
+Alle Klänge werden synthetisch erzeugt.

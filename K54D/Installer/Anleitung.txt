@@ -1,0 +1,63 @@
+K-54 D · Keller54 · by Frank E.
+==============================
+Drumcomputer: 12 Spuren, 8 bis 32 Steps, synchron zur DAW.
+
+INSTALLIEREN
+1. DAW schließen.
+2. Doppelklick auf "K-54 D installieren.pkg" und den Schritten folgen
+   (am Ende wird dein Mac-Passwort abgefragt).
+
+Installiert werden:
+- Audio Unit:  /Library/Audio/Plug-Ins/Components/K-54 D.component
+- VST3:        /Library/Audio/Plug-Ins/VST3/K-54 D.vst3
+- App:         /Programme/K-54 D.app
+
+LOGIC PRO
+Neue Software-Instrument-Spur > AU-Instrumente > Keller54 > K-54 D
+
+LOSLEGEN
+Preset oben rechts wählen (808, 909, Hip-Hop, House, Disco, Schlager,
+Jazz, Latin, Pop & Rock ...) und in der DAW auf Play drücken.
+Der K-54 D läuft immer im Tempo und Takt der DAW.
+Ohne DAW-Wiedergabe: Knopf PLAY.
+
+RASTER
+Klick = Step an/aus, ziehen = mehrere Steps.
+Shift + ziehen oder Mausrad = lauter/leiser.
+Rechtsklick = Lautstärke wählen und Wirbel (2x-4x, z. B. Hi-Hat-Rolls).
+M = Spur stumm, S = Spur solo, Klick auf den Namen = vorhören.
+
+LAUTSTÄRKE PRO STEP
+Unter dem Raster die Balken der gewählten Spur hoch/runter ziehen.
+Schnell-Knöpfe: LAUTER, LEISER, GLEICH, BETONT, ANSTIEG, ZUFALL.
+
+STEPS UND RASTER
+STEPS: 8 bis 32. RASTER: 1/8, 1/16, 1/32 und Triolen (1/8T, 1/16T)
+für Swing, Shuffle und Jazz. SWING verschiebt jeden zweiten Step.
+
+PATTERN A-D
+A Grundgroove, B mit Fill, C Break, D mit Crash auf der Eins.
+Gewechselt wird immer am Pattern-Ende. MIDI-Noten C0, C#0, D0, D#0
+schalten A-D um (z. B. aus einer MIDI-Spur in der DAW).
+
+SOUND
+Spur anklicken, dann unten das Klang-Modell wählen (808, 909, Linn-Stil,
+akustisch, Besen, Trap, Lo-Fi ...) oder SAMPLE LADEN.
+Eine Audiodatei lässt sich auch direkt auf eine Spur ziehen.
+Regler: Level, Tune, Decay, Tone, Snap, Drive (fetter), Pan, Room.
+MASTER: FAT (Bass + Sättigung), GLUE (Bus-Kompressor), ROOM (Hall).
+
+MIDI
+MIDI-Noten spielen die Spuren direkt (GM): Kick C1, Snare D1, Clap D#1,
+Rim C#1, Hi-Hat F#1, Open Hat A#1, Toms F1/A1/C2, Crash C#2, Ride D#2.
+SEQ aus = nur MIDI. "MIDI" in die DAW ziehen = Pattern als MIDI-Clip.
+
+PRESETS
+Eigene Presets (SAVE) landen in ~/Music/Keller54/K-54 D Presets
+– mit Kit, allen vier Patterns und geladenen Samples.
+
+UPDATE
+Knopf UPDATE: neue Versionen kostenlos von keller54.de.
+
+Alle Klänge werden synthetisch erzeugt (keine fremden Aufnahmen).
+"808", "909" und "Linn" bezeichnen nur den Klangstil.
