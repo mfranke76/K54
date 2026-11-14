@@ -13,11 +13,12 @@ static int failures = 0, checks = 0;
 
 struct FakeHead : public juce::AudioPlayHead
 {
-    double bpm = 120.0, ppq = 0.0; bool playing = true;
+    double bpm = 120.0, ppq = 0.0; bool playing = true, looping = false; double loopStart = 0.0, loopEnd = 4.0;
     juce::Optional<PositionInfo> getPosition() const override
     {
         PositionInfo p;
         p.setBpm (bpm); p.setPpqPosition (ppq); p.setIsPlaying (playing);
+        p.setIsLooping (looping); p.setLoopPoints (juce::AudioPlayHead::LoopPoints { loopStart, loopEnd });
         p.setTimeSignature (juce::AudioPlayHead::TimeSignature { 4, 4 });
         return p;
     }
@@ -358,7 +359,100 @@ int main (int argc, char** argv)
         pf.deleteFile();
     }
 
-    // ------------------------------------------------------------------ 6) Screenshot
+    // ------------------------------------------------------------------ 6) DAW-Robustheit
+    std::cout << "6) DAW-Robustheit (Loop, Vorzaehler, Sampleraten, Bloecke, Zustand)" << std::endl;
+    {
+        // a) Cycle wie in Logic: Block geht ueber das Loop-Ende hinaus (nicht geteilt)
+        cleanSlate (proc);
+        setParam (proc, PID::lane (0, "model"), 1.0f);
+        setParam (proc, PID::lane (0, "decay"), 0.0f);
+        proc.patterns.setVel (0, 0, 0, 127);           // Kick auf der Eins
+        flush (proc, head);
+        head.bpm = 120.0; head.looping = true; head.loopStart = 0.0; head.loopEnd = 4.0;
+        head.ppq = 3.9;                                 // 0,1 Viertel vor Loop-Ende
+        juce::MidiBuffer midi;
+        juce::AudioBuffer<float> b (2, 4800);           // 0,1 s = 0,2 Viertel -> Loop springt mitten im Block
+        const int before = proc.getLaneHits (0);
+        proc.processBlock (b, midi);
+        const auto o = onsets (b, 0.1f);
+        if (! o.empty() && o[0] != 2400)
+            std::cout << "   Loop: Pegel bei " << o[0] << " = " << b.getMagnitude (0, o[0], 1) << ", bei 2400 = " << b.getMagnitude (2400, 50) << std::endl;
+        CHECK (proc.getLaneHits (0) - before == 1, "Loop: Kick auf der Eins nach dem Loop-Sprung fehlt");
+        CHECK (! o.empty() && std::abs (o[0] - 2400) <= 2, "Loop: Kick an falscher Stelle (" + juce::String (o.empty() ? -1 : o[0]) + " statt 2400)");
+        head.looping = false;
+
+        // b) Vorzaehler / Pre-Roll (negative Position wie in Cubase/Nuendo)
+        flush (proc, head);
+        auto pre = render (proc, head, 1.2, sr, -2.0);  // Start 2 Viertel vor Takt 1
+        const auto po = onsets (pre);
+        CHECK (! po.empty() && std::abs (po[0] - 48000) <= 2, "Vorzaehler: erster Schlag bei " + juce::String (po.empty() ? -1 : po[0]) + " statt 48000");
+
+        // c) Sampleraten 44,1 - 192 kHz, Blockgroessen 1 bis 8192 (auch groesser als angekuendigt)
+        for (double rate : { 44100.0, 88200.0, 96000.0, 192000.0 })
+        {
+            const int sizes[] { 1, 7, 256, 8192, 33, 2048, 512 };
+            const auto name = juce::String (rate / 1000.0, 1) + " kHz";
+            for (int pass = 0; pass < 2; ++pass)
+            {
+                // pass 0: nur Kick auf jedem Viertel (Timing) · pass 1: volles Techno-Preset (Pegel, NaN)
+                if (pass == 0)
+                {
+                    cleanSlate (proc);
+                    setParam (proc, PID::lane (0, "model"), 1.0f);
+                    setParam (proc, PID::lane (0, "decay"), 0.0f);
+                    for (int st2 : { 0, 4, 8, 12 }) proc.patterns.setVel (0, 0, st2, 127);
+                }
+                else
+                    for (int i = 0; i < Presets::numFactory(); ++i)
+                        if (juce::String (Presets::factory (i).name) == "Techno") proc.loadFactory (i);
+                proc.prepareToPlay (rate, 256);
+                head.ppq = 0.0; head.bpm = 128.0;
+                const int total = (int) (rate * 2.0);
+                juce::AudioBuffer<float> all (2, total);
+                int pos = 0, k = 0;
+                while (pos < total)
+                {
+                    const int n = juce::jmin (sizes[k++ % 7], total - pos);
+                    juce::AudioBuffer<float> blk (2, n);
+                    proc.processBlock (blk, midi);
+                    for (int c = 0; c < 2; ++c) all.copyFrom (c, pos, blk, c, 0, n);
+                    pos += n;
+                    head.ppq += n / rate * head.bpm / 60.0;
+                }
+                CHECK (finite (all) && all.getMagnitude (0, total) <= 1.0f, name + ": NaN oder uebersteuert");
+                if (pass == 0)
+                {
+                    const auto ko = onsets (all, 0.05f, (int) (rate * 0.1));
+                    const long want = std::lround (rate * 60.0 / 128.0);
+                    CHECK (ko.size() >= 4 && std::abs (ko[1] - want) <= 3 && std::abs (ko[3] - 3 * want) <= 4, name + ": Timing falsch");
+                    std::cout << "   " << name << ": " << (int) ko.size() << " Kicks, zweiter bei " << (ko.size() > 1 ? ko[1] : -1)
+                              << " (soll " << want << ")" << std::endl;
+                }
+            }
+        }
+        proc.prepareToPlay (sr, 1024);
+
+        // d) Zustand: Schalter und Werte exakt zurueck (auch nach anderen Zwischenwerten)
+        for (int l = 0; l < DrumInfo::numLanes; ++l)
+        {
+            proc.apvts.getParameter (PID::lane (l, "mute"))->setValueNotifyingHost (0.0f);
+            proc.apvts.getParameter (PID::lane (l, "solo"))->setValueNotifyingHost (l == 3 ? 1.0f : 0.0f);
+        }
+        juce::MemoryBlock st;
+        proc.getStateInformation (st);
+        for (auto* prm : proc.getParameters()) prm->setValueNotifyingHost (0.33f);
+        proc.setStateInformation (st.getData(), (int) st.getSize());
+        bool ok = true;
+        for (int l = 0; l < DrumInfo::numLanes; ++l)
+        {
+            ok &= proc.apvts.getParameter (PID::lane (l, "mute"))->getValue() < 0.01f;
+            ok &= std::abs (proc.apvts.getParameter (PID::lane (l, "solo"))->getValue() - (l == 3 ? 1.0f : 0.0f)) < 0.01f;
+        }
+        CHECK (ok, "Zustand: Mute/Solo nicht exakt wiederhergestellt");
+        CHECK (proc.getNumPrograms() == 1, "Programme: DAW darf keine Werks-Presets per Programmwechsel laden");
+    }
+
+    // ------------------------------------------------------------------ 7) Screenshot
     std::cout << "6) Screenshot" << std::endl;
     {
         for (int i = 0; i < Presets::numFactory(); ++i)

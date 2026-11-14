@@ -37,7 +37,7 @@ void K54DProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     engine.prepare (sampleRate);
     reverb.setSampleRate (sampleRate);
     reverb.reset();
-    roomBuf.setSize (2, juce::jmax (512, samplesPerBlock), false, true, true);
+    roomBuf.setSize (2, juce::jmax (8192, samplesPerBlock * 2), false, true, true);
     lastFat = -1.0f;
     compEnv = 0.0f; compGain = 1.0f;
     for (int c = 0; c < 2; ++c) shelf.z1[c] = shelf.z2[c] = 0.0f;
@@ -115,13 +115,16 @@ void K54DProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBu
 
     // ------------------------------------------------ Sequencer im DAW-Tempo
     double bpm = 120.0, ppqStart = 0.0;
-    bool hostRun = false, havePpq = false;
+    bool hostRun = false, havePpq = false, looping = false;
+    double loopStart = 0.0, loopEnd = 0.0;
     if (auto* ph = getPlayHead())
         if (auto pos = ph->getPosition())
         {
             if (auto b = pos->getBpm()) bpm = *b;
             hostRun = pos->getIsPlaying();
             if (auto q = pos->getPpqPosition()) { ppqStart = *q; havePpq = true; }
+            looping = pos->getIsLooping();
+            if (auto lp = pos->getLoopPoints()) { loopStart = lp->ppqStart; loopEnd = lp->ppqEnd; }
         }
     bpm = juce::jlimit (20.0, 400.0, bpm);
     hostBpm = bpm;
@@ -143,37 +146,50 @@ void K54DProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBu
         const double len = Res::stepPpq (juce::roundToInt (pRes->load()));
         const double swingOff = pSwing->load() * 0.5 * len;
         const float human = pHuman->load();
-        const auto firstN = (juce::int64) std::floor ((ppqStart - len) / len);
-        const auto lastN  = (juce::int64) std::floor (ppqEnd / len);
-
-        for (auto k = firstN; k <= lastN; ++k)
+        // Ein Fenster [w0, w1) der Zeitachse abarbeiten; sampleBase = Position im Block, an der w0 liegt
+        auto schedule = [&] (double w0, double w1, double sampleBase)
         {
-            const double base = (double) k * len + ((k & 1) != 0 ? swingOff : 0.0);
-            const int idx = (int) (((k % steps) + steps) % steps);
-            if (idx == 0 && base >= ppqStart && base < ppqEnd && pendingPattern.load() >= 0)
-                currentPattern = pendingPattern.exchange (-1);
-            const int pat = currentPattern.load();
-
-            for (int lane = 0; lane < DrumInfo::numLanes; ++lane)
+            const auto firstN = (juce::int64) std::floor ((w0 - len) / len);
+            const auto lastN  = (juce::int64) std::floor (w1 / len);
+            for (auto k = firstN; k <= lastN; ++k)
             {
-                const int v = patterns.vel (pat, lane, idx);
-                if (v <= 0) continue;
-                const int rat = patterns.ratchet (pat, lane, idx);
-                for (int h = 0; h < rat; ++h)
+                const double base = (double) k * len + ((k & 1) != 0 ? swingOff : 0.0);
+                const int idx = (int) (((k % steps) + steps) % steps);
+                if (idx == 0 && base >= w0 && base < w1 && pendingPattern.load() >= 0)
+                    currentPattern = pendingPattern.exchange (-1);
+                const int pat = currentPattern.load();
+
+                for (int lane = 0; lane < DrumInfo::numLanes; ++lane)
                 {
-                    const double ev = base + h * len / rat;
-                    if (ev < ppqStart || ev >= ppqEnd) continue;
-                    int off = (int) std::lround ((ev - ppqStart) * samplesPerPpq);
-                    float vel = (float) v / 127.0f * (h == 0 ? 1.0f : 0.82f);
-                    if (human > 0.0f)
+                    const int v = patterns.vel (pat, lane, idx);
+                    if (v <= 0) continue;
+                    const int rat = patterns.ratchet (pat, lane, idx);
+                    for (int h = 0; h < rat; ++h)
                     {
-                        vel *= 1.0f - human * 0.3f * rng.nextFloat();
-                        off += (int) (rng.nextFloat() * human * 0.012 * sr);
+                        const double ev = base + h * len / rat;
+                        if (ev < w0 || ev >= w1) continue;
+                        int off = (int) std::lround (sampleBase + (ev - w0) * samplesPerPpq);
+                        float vel = (float) v / 127.0f * (h == 0 ? 1.0f : 0.82f);
+                        if (human > 0.0f)
+                        {
+                            vel *= 1.0f - human * 0.3f * rng.nextFloat();
+                            off += (int) (rng.nextFloat() * human * 0.012 * sr);
+                        }
+                        addEvent (juce::jlimit (0, n - 1, off), lane, juce::jlimit (0.02f, 1.0f, vel));
                     }
-                    addEvent (juce::jlimit (0, n - 1, off), lane, juce::jlimit (0.02f, 1.0f, vel));
                 }
             }
+        };
+
+        // Cycle/Loop der DAW: manche DAWs (z. B. Logic) teilen den Block am Loop-Ende nicht
+        if (hostRun && looping && loopEnd > loopStart && ppqStart < loopEnd && ppqEnd > loopEnd)
+        {
+            schedule (ppqStart, loopEnd, 0.0);
+            schedule (loopStart, loopStart + (ppqEnd - loopEnd), (loopEnd - ppqStart) * samplesPerPpq);
         }
+        else
+            schedule (ppqStart, ppqEnd, 0.0);
+
         const auto cur = (juce::int64) std::floor (ppqStart / len);
         playingStep = (int) (((cur % steps) + steps) % steps);
     }
@@ -290,15 +306,13 @@ void K54DProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBu
 }
 
 // ============================================================================ Presets
-int K54DProcessor::getNumPrograms() { return Presets::numFactory(); }
+// Nur ein Programm: Presets laufen ueber das eigene Menue. So kann keine DAW (Logic, Cubase, Nuendo ...)
+// beim Laden eines Projekts per Programmwechsel deine eigenen Patterns ueberschreiben.
+int K54DProcessor::getNumPrograms() { return 1; }
 
-void K54DProcessor::setCurrentProgram (int index) { loadFactory (index); }
+void K54DProcessor::setCurrentProgram (int) {}
 
-const juce::String K54DProcessor::getProgramName (int index)
-{
-    const auto& f = Presets::factory (index);
-    return juce::String (f.category) + " - " + f.name;
-}
+const juce::String K54DProcessor::getProgramName (int) { return presetName; }
 
 void K54DProcessor::loadFactory (int index)
 {
@@ -496,7 +510,19 @@ void K54DProcessor::restoreTree (const juce::ValueTree& t, bool withUi)
     params.removeChild (params.getChildWithName ("PATTERNS"), nullptr);
     params.removeChild (params.getChildWithName ("SAMPLES"), nullptr);
     if (params.hasType (apvts.state.getType()))
+    {
         apvts.replaceState (params);
+        // jeden Parameter ausdruecklich setzen (auch Schalter exakt, unabhaengig vom vorherigen Wert)
+        for (auto* prm : getParameters())
+            if (auto* rp = dynamic_cast<juce::RangedAudioParameter*> (prm))
+            {
+                const auto child = params.getChildWithProperty ("id", rp->getParameterID());
+                if (child.isValid() && child.hasProperty ("value"))
+                    rp->setValueNotifyingHost (rp->convertTo0to1 ((float) child.getProperty ("value")));
+                else
+                    rp->setValueNotifyingHost (rp->getDefaultValue());
+            }
+    }
     presetName = t.getProperty ("presetName", "Init").toString();
     currentFactory = t.getProperty ("factory", -1);
     if (withUi)

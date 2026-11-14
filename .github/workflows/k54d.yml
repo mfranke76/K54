@@ -32,8 +32,13 @@ jobs:
         run: |
           cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DK54D_BUILD_TESTS=ON
           cmake --build build --target K54DTest
-      - name: Tests ausfuehren (Klaenge, DAW-Sync, Presets, Zustand)
+      - name: Tests ausfuehren (Klaenge, DAW-Sync, Loop, Sampleraten, Presets, Zustand)
         run: xvfb-run -a ./build/K54DTest_artefacts/Release/K54DTest out
+      - name: VST3 bauen und mit pluginval pruefen (Strenge 10)
+        run: |
+          cmake --build build --target K54D_VST3
+          curl -sSL -o pv.zip https://github.com/Tracktion/pluginval/releases/latest/download/pluginval_Linux.zip && unzip -q pv.zip
+          xvfb-run -a ./pluginval --strictness-level 10 --validate-in-process --timeout-ms 900000 "build/K54D_artefacts/Release/VST3/K-54 D.vst3"
 
   windows:
     runs-on: windows-latest
@@ -43,6 +48,13 @@ jobs:
         run: cmake -B build -A x64
       - name: Kompilieren
         run: cmake --build build --config Release --parallel --target K54D_VST3 K54D_Standalone
+      - name: VST3 mit pluginval pruefen (Strenge 10 - wie Cubase, Nuendo, Bitwig, Ableton es nutzen)
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri https://github.com/Tracktion/pluginval/releases/latest/download/pluginval_Windows.zip -OutFile pv.zip
+          Expand-Archive pv.zip -DestinationPath pv -Force
+          $p = Start-Process -FilePath "pv\pluginval.exe" -ArgumentList '--strictness-level','10','--validate-in-process','--timeout-ms','900000','"build\K54D_artefacts\Release\VST3\K-54 D.vst3"' -NoNewWindow -Wait -PassThru
+          if ($p.ExitCode -ne 0) { exit $p.ExitCode }
       - name: Version lesen
         id: ver
         shell: pwsh
@@ -108,6 +120,21 @@ jobs:
           mkdir -p dist
           for f in K-54\ D-*-Installer.dmg; do mv "$f" "dist/${f// /-}"; done
           ls -la dist
+      - name: Logic-Test (auval) und pluginval fuer AU + VST3
+        run: |
+          ART="build-installer/K54D_artefacts/Release"
+          mkdir -p ~/Library/Audio/Plug-Ins/Components ~/Library/Audio/Plug-Ins/VST3
+          cp -R "$ART/AU/K-54 D.component" ~/Library/Audio/Plug-Ins/Components/
+          cp -R "$ART/VST3/K-54 D.vst3" ~/Library/Audio/Plug-Ins/VST3/
+          killall -9 AudioComponentRegistrar 2>/dev/null || true
+          sleep 3
+          auval -a | grep -i keller || true
+          auval -strict -v aumu K5D1 Kl54 | tee auval.log
+          grep -q "AU VALIDATION SUCCEEDED" auval.log
+          curl -sSL -o pv.zip https://github.com/Tracktion/pluginval/releases/latest/download/pluginval_macOS.zip && unzip -q pv.zip
+          PV="pluginval.app/Contents/MacOS/pluginval"
+          "$PV" --strictness-level 10 --validate-in-process --timeout-ms 900000 ~/Library/Audio/Plug-Ins/VST3/"K-54 D.vst3"
+          "$PV" --strictness-level 10 --validate-in-process --timeout-ms 900000 ~/Library/Audio/Plug-Ins/Components/"K-54 D.component"
       - uses: actions/upload-artifact@v4
         with:
           name: K-54-D-macOS

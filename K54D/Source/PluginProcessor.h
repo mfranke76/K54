@@ -31,7 +31,7 @@ public:
     double getTailLengthSeconds() const override { return 2.0; }
 
     int getNumPrograms() override;
-    int getCurrentProgram() override { return juce::jmax (0, currentFactory); }
+    int getCurrentProgram() override { return 0; }
     void setCurrentProgram (int index) override;
     const juce::String getProgramName (int index) override;
     void changeProgramName (int, const juce::String&) override {}
