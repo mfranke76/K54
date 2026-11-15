@@ -1,3 +1,5 @@
+#include <set>
+#include <map>
 // Offline-Test K-54 S: spielt jedes Werks-Preset an, prueft auf Stille/Uebersteuerung/NaN,
 // testet Sample (laden, Loop, One-Shot, Aufnahme), eigene Wavetable, Preset-Speichern,
 // und schreibt WAV-Beispiele + Screenshots der Oberflaeche.
@@ -182,6 +184,122 @@ int main (int argc, char** argv)
         const bool ok = pn->waitUntilReady (30000);
         std::printf ("Fluegel-Samples geladen: %s (%u ms)\n", ok ? "ja" : "NEIN", juce::Time::getMillisecondCounter() - t0);
         allOk &= ok;
+    }
+
+    // ---------------------------------------------------------------- Automation + MIDI-Learn
+    //      K55Test <out> learn   (schneller Lauf: nur diese Tests)
+    {
+        struct Spy : juce::AudioProcessorListener
+        {
+            std::map<int, int> begins, ends, changes;
+            void audioProcessorParameterChanged (juce::AudioProcessor*, int i, float) override { ++changes[i]; }
+            void audioProcessorChanged (juce::AudioProcessor*, const ChangeDetails&) override {}
+            void audioProcessorParameterChangeGestureBegin (juce::AudioProcessor*, int i) override { ++begins[i]; }
+            void audioProcessorParameterChangeGestureEnd (juce::AudioProcessor*, int i) override { ++ends[i]; }
+        } spy;
+        auto pump = [] (int ms) { juce::MessageManager::getInstance()->runDispatchLoopUntil (ms); };
+        auto ok = [&] (bool c, const char* what) { std::cout << (c ? "OK    " : "FEHLER ") << what << std::endl; allOk &= c; };
+        proc.prepareToPlay (sr, block);
+        juce::AudioBuffer<float> buf (2, block);
+        auto runCC = [&] (int ch, int cc, int val) -> int
+        {
+            juce::MidiBuffer m;
+            m.addEvent (juce::MidiMessage::controllerEvent (ch, cc, val), 3);
+            m.addEvent (juce::MidiMessage::noteOn (1, 60, 0.5f), 10);
+            buf.clear();
+            proc.processBlock (buf, m);
+            int left = 0;
+            for (const auto meta : m) if (meta.getMessage().isController()) ++left;
+            return left;                                   // CCs, die im Puffer geblieben sind
+        };
+
+        // a) alle Parameter fuer die DAW: eindeutige IDs, Namen, automatisierbar
+        {
+            std::set<juce::String> ids; bool good = true;
+            for (auto* p : proc.getParameters())
+                if (auto* rp = dynamic_cast<juce::RangedAudioParameter*> (p))
+                    good &= ids.insert (rp->getParameterID()).second && rp->isAutomatable() && rp->getName (64).isNotEmpty();
+            ok (good && ids.size() == (size_t) proc.getParameters().size(), "Alle Parameter automatisierbar, eindeutige IDs");
+        }
+
+        auto& learn = proc.midiLearn;
+        learn.clearAll();
+        const int cut = learn.indexOf ("cutoff"), res = learn.indexOf ("resonance");
+        proc.addListener (&spy);
+
+        // b) Lernen: Cutoff auf CC 74 / Kanal 1
+        learn.startLearning (cut);
+        const int leftLearn = runCC (1, 74, 10);
+        pump (100);
+        auto a = learn.getAssignment (cut);
+        ok (a.cc == 74 && a.channel == 1 && learn.getLearningParam() < 0, "MIDI lernen: Cutoff = CC 74 / Kanal 1");
+        ok (leftLearn == 0, "Lern-CC wird nicht an den Synth weitergereicht");
+
+        // c) Steuern: Wert kommt beim Parameter an, mit Geste (DAW kann aufnehmen)
+        spy.begins.clear(); spy.ends.clear();
+        const int leftPlay = runCC (1, 74, 127);
+        pump (60);
+        const float cutNorm = proc.getParameters()[cut]->getValue();
+        ok (std::abs (cutNorm - 1.0f) < 1.0e-4f, "CC 74 = 127 -> Cutoff ganz auf");
+        ok (leftPlay == 0, "Zugewiesener CC wirkt nicht doppelt (z. B. als Mod-Rad)");
+        ok (spy.begins[cut] == 1 && spy.ends[cut] == 0, "Geste beginnt (Automation-Aufnahme in der DAW)");
+        for (int v : { 100, 80, 60 }) { runCC (1, 74, v); pump (20); }
+        ok (spy.begins[cut] == 1, "Waehrend des Drehens nur eine Geste");
+        pump (700);
+        ok (spy.ends[cut] == 1, "Geste endet nach dem Loslassen");
+        ok (std::abs (proc.getParameters()[cut]->getValue() - 60.0f / 127.0f) < 1.0e-4f, "Letzter Reglerwert steht");
+
+        // d) anderer Kanal / anderer CC aendern nichts und bleiben im Puffer
+        const float before = proc.getParameters()[cut]->getValue();
+        const int leftOther = runCC (2, 74, 0);
+        pump (60);
+        ok (proc.getParameters()[cut]->getValue() == before && leftOther == 1, "CC 74 auf Kanal 2 bleibt unberuehrt");
+        ok (runCC (1, 1, 64) == 1, "Mod-Rad (CC 1) unveraendert durchgereicht");
+
+        // e) neu lernen: ein CC gehoert immer nur einem Parameter
+        learn.startLearning (res); runCC (1, 74, 5); pump (100);
+        ok (learn.getAssignment (res).cc == 74 && learn.getAssignment (cut).cc < 0, "CC 74 wandert zu Emphasis");
+        learn.assign (21, 0, cut);                     // Kanal egal
+        runCC (5, 21, 0); pump (60);
+        ok (proc.getParameters()[cut]->getValue() < 1.0e-4f, "Zuweisung 'jeder Kanal' (Kanal 0)");
+
+        // f) im Projekt gespeichert und wieder geladen
+        juce::MemoryBlock state;
+        proc.getStateInformation (state);
+        learn.clearAll();
+        proc.setStateInformation (state.getData(), (int) state.getSize());
+        pump (60);
+        ok (learn.getAssignment (cut).cc == 21 && learn.getAssignment (res).cc == 74, "Zuweisungen im Projekt gespeichert");
+        ok (! proc.apvts.state.getChildWithName ("MIDILEARN").isValid(), "Zuweisungen landen nicht in Presets");
+        ok (K54MidiLearn::getDefaultsFile().existsAsFile(), "Standard-Zuweisungen fuer neue Instanzen gespeichert");
+        {
+            std::unique_ptr<juce::AudioProcessor> second (createPluginFilter());
+            auto& p2 = dynamic_cast<K55Processor&> (*second);
+            ok (p2.midiLearn.getAssignment (cut).cc == 21, "Neue Instanz uebernimmt die Hardware-Zuweisungen");
+        }
+
+        // g) DAW-Automation wirkt auf den Klang (Cutoff zu vs. auf)
+        auto level = [&] (float cutoffHz)
+        {
+            proc.setCurrentProgram (0); proc.prepareToPlay (sr, block);
+            setP (proc, "cutoff", cutoffHz);
+            auto b = render (proc, sr, block, 0.6, { { at (0.01), 48, true, 0.9f } });
+            float hi = 0.0f;                           // grobe Hoehen: Differenz benachbarter Samples
+            for (int i = 1; i < b.getNumSamples(); ++i) hi += std::abs (b.getSample (0, i) - b.getSample (0, i - 1));
+            return hi;
+        };
+        ok (level (200.0f) * 3.0f < level (12000.0f), "Automation Cutoff hoerbar");
+
+        // h) Oberflaeche: Markierung am Regler
+        shot (proc, 0, outDir.getChildFile ("screen_midi_learn.png"), [&] (juce::Component&) { learn.startLearning (learn.indexOf ("drive")); });
+        learn.cancelLearning();
+        proc.removeListener (&spy);
+        learn.clearAll();
+        if (argc > 2 && juce::String (argv[2]) == "learn")
+        {
+            std::printf ("\n%s\n", allOk ? "ALLE TESTS OK" : "ES GIBT FEHLER");
+            return allOk ? 0 : 1;
+        }
     }
 
     // ---------------------------------------------------------------- 1) alle Werks-Presets

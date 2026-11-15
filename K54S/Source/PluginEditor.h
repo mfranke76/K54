@@ -2,6 +2,7 @@
 #include <juce_audio_utils/juce_audio_utils.h>
 #include "PluginProcessor.h"
 #include "LookAndFeel.h"
+#include "LearnControls.h"
 #include "ModPanel.h"
 #include "SamplePanel.h"
 #include "HarmonyPanel.h"
@@ -162,13 +163,13 @@ public:
 private:
     struct Knob
     {
-        juce::Slider slider;
+        LearnSlider  slider;
         juce::Label  label;
         std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> attachment;
     };
     struct Choice
     {
-        juce::ComboBox box;
+        LearnCombo     box;
         juce::Label    label;
         std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> attachment;
     };
@@ -200,14 +201,14 @@ private:
     int lastPresetVersion = -1;
 
     OutputMeter outMeter;
-    juce::Slider outGain;
+    LearnSlider outGain;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> outGainAtt;
 
     juce::MidiKeyboardComponent keyboard;
     WheelView pitchWheel, modWheel;
 
     juce::TextButton synthTab { "SYNTH" }, modTab { "MOD" }, sampleTab { "SAMPLE" }, fxTab { "FX" }, harmTab { "HARMONY" }, keysTab { "KEYS" };
-    juce::TextButton harmButton { ParamChoices::u8 ("\xe2\x99\xab HARMONIE") };
+    LearnButton harmButton { ParamChoices::u8 ("\xe2\x99\xab HARMONIE") };
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> harmAtt;
     juce::Image portrait;
     ModPanel modPanel;

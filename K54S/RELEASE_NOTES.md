@@ -1,5 +1,14 @@
 K-54 S · Keller54 · by Frank E. – BETA
 
+Neu in 1.6.0 – Hardware-Regler und Automation in jeder DAW (Beta):
+- MIDI-Learn: Rechtsklick auf einen Regler, ein Auswahlfeld oder einen Schalter > „MIDI lernen …“, dann am Controller einen Regler, Fader oder Taster bewegen – fertig
+- Zugewiesene Regler zeigen klein ihre CC-Nummer, der lernende Regler einen Rahmen mit „MIDI?“
+- Ein Hardware-Regler steuert genau einen Parameter; Kanal wird mitgelernt. Zuweisung entfernen oder alle löschen im selben Menü
+- Die Zuweisungen werden im Projekt gespeichert und gelten automatisch auch für neue K-54 S in anderen Projekten (gleiche Hardware, gleiche Belegung)
+- Bewegungen am Controller kommen in der DAW wie Mausbewegungen an: in Touch/Latch/Write wird die Automation mit aufgenommen
+- Zugewiesene CCs wirken nicht doppelt (z. B. CC 1 nicht zusätzlich als Mod-Rad)
+- Alle Parameter sind in der DAW automatisierbar (VST3 und AU); im Rechtsklick-Menü stehen zusätzlich die Funktionen der DAW (z. B. Automation zeigen in Cubase/Nuendo)
+
 Neu in 1.5.0 – Dudelsack-Orgel und Spanische Trompeten (Beta):
 - Neue Orgelwelt „Dudelsack & Spanische Trompeten“: Chanter aus Regal, Krummhorn, Nasat und Terz, dazu Trompeta real 8' und Bajoncillo 4' (spanische Horizontaltrompeten)
 - Dudelsack-Bordun auf A (Bass-A, Tenor-A, leise Quinte) klingt von selbst, solange du spielst

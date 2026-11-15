@@ -171,6 +171,7 @@ void K55Processor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuf
 {
     juce::ScopedNoDenormals noDenormals;
     const int n = buffer.getNumSamples();
+    midiLearn.process (midi);                      // zugewiesene Hardware-Regler (MIDI-Learn)
     keyboardState.processNextMidiBuffer (midi, 0, n, true);
     // Bildschirm-Wheels wie echte Wheels einspeisen
     if (uiBendDirty.exchange (false))
@@ -864,6 +865,7 @@ void K55Processor::getStateInformation (juce::MemoryBlock& destData)
     state.setProperty ("program", currentProgram, nullptr);
     state.setProperty ("uiScale", uiScale, nullptr);
     writeSourceInfo (state);
+    state.appendChild (midiLearn.toValueTree(), nullptr);
     if (auto xml = state.createXml())
         copyXmlToBinary (*xml, destData);
 }
@@ -877,6 +879,20 @@ void K55Processor::setStateInformation (const void* data, int sizeInBytes)
             presetName = tree.getProperty ("presetName", "").toString();
             currentProgram = (int) tree.getProperty ("program", 0);
             uiScale = juce::jlimit (0.7f, 1.6f, (float) tree.getProperty ("uiScale", 1.0f));
+            // MIDI-Zuweisungen aus dem Projekt (fehlen sie, bleiben die Standard-Zuweisungen)
+            auto learn = tree.getChildWithName ("MIDILEARN");
+            if (learn.isValid())
+            {
+                auto copyLearn = learn.createCopy();
+                tree.removeChild (learn, nullptr);
+                if (juce::MessageManager::getInstance()->isThisTheMessageThread())
+                    midiLearn.fromValueTree (copyLearn, false);
+                else
+                    juce::MessageManager::callAsync ([safe = juce::WeakReference<K55Processor> (this), copyLearn]
+                    {
+                        if (auto* p = safe.get()) p->midiLearn.fromValueTree (copyLearn, false);
+                    });
+            }
             apvts.replaceState (tree);
             auto copy = tree.createCopy();
             if (juce::MessageManager::getInstance()->isThisTheMessageThread())

@@ -2,6 +2,7 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 #include "PluginProcessor.h"
 #include "LookAndFeel.h"
+#include "LearnControls.h"
 
 /** Umschalt-Knopf im K-54 S-Look */
 inline void setupToggle (juce::TextButton& b, const juce::String& tip)
@@ -23,19 +24,19 @@ protected:
 
     struct Knob
     {
-        juce::Slider s;
+        LearnSlider s;
         juce::Label  l;
         std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> a;
     };
     struct Choice
     {
-        juce::ComboBox b;
+        LearnCombo     b;
         juce::Label    l;
         std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> a;
     };
     struct Toggle
     {
-        juce::TextButton b;
+        LearnButton b;
         std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> a;
     };
 
@@ -53,6 +54,7 @@ protected:
         s.getProperties().set ("bipolar", bipolar);
         addAndMakeVisible (s);
         k->a = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (proc.apvts, id, s);
+        s.setParamID (id);
         if (auto* param = proc.apvts.getParameter (id))
             s.setDoubleClickReturnValue (true, param->convertFrom0to1 (param->getDefaultValue()));
         setupLabel (k->l, caption);
@@ -68,6 +70,7 @@ protected:
         c->b.setJustificationType (juce::Justification::centredLeft);
         addAndMakeVisible (c->b);
         c->a = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (proc.apvts, id, c->b);
+        c->b.setParamID (id);
         setupLabel (c->l, caption);
         return *c;
     }
@@ -79,6 +82,7 @@ protected:
         setupToggle (t->b, tip);
         addAndMakeVisible (t->b);
         t->a = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (proc.apvts, id, t->b);
+        t->b.setParamID (id);
         return *t;
     }
 
@@ -133,6 +137,7 @@ protected:
         s.setColour (juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
         addAndMakeVisible (s);
         k->a = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (proc.apvts, id, s);
+        s.setParamID (id);
         if (auto* param = proc.apvts.getParameter (id))
             s.setDoubleClickReturnValue (true, param->convertFrom0to1 (param->getDefaultValue()));
         return *k;

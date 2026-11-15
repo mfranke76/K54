@@ -5,6 +5,7 @@
 #include "KeysEngine.h"
 #include "Presets.h"
 #include "Harmonizer.h"
+#include "MidiLearn.h"
 
 class K55Processor : public juce::AudioProcessor, private juce::Timer
 {
@@ -80,6 +81,7 @@ public:
     bool hasAudioInput() const { return getTotalNumInputChannels() > 0; }
 
     juce::AudioProcessorValueTreeState apvts;
+    K54MidiLearn midiLearn { *this };              // nach apvts anlegen (braucht die Parameter)
     std::atomic<int> presetVersion { 0 };
     juce::MidiKeyboardState keyboardState;
 

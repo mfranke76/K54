@@ -51,6 +51,7 @@ K55Main::K55Main (K55Processor& p)
     harmButton.setClickingTogglesState (true);
     harmButton.setTooltip ("Automatische Harmonien an/aus (Einstellungen im Reiter HARMONY)");
     harmAtt = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (proc.apvts, ParamID::harmOn, harmButton);
+    harmButton.setParamID (ParamID::harmOn);
     portrait = juce::ImageCache::getFromMemory (BinaryData::frank_portrait_png, BinaryData::frank_portrait_pngSize);
     addChildComponent (samplePanel);
     addChildComponent (fxPanel);
@@ -138,6 +139,7 @@ K55Main::K55Main (K55Processor& p)
     outGain.setTooltip ("Output Gain (Main)");
     addAndMakeVisible (outGain);
     outGainAtt = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (proc.apvts, ParamID::outGain, outGain);
+    outGain.setParamID (ParamID::outGain);
     outGain.setDoubleClickReturnValue (true, 0.0);
 
     // Tastatur
@@ -209,6 +211,7 @@ K55Main::Knob& K55Main::makeKnob (const char* id, const juce::String& caption, b
     s.getProperties().set ("bipolar", bipolar);
     addAndMakeVisible (s);
     k->attachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (proc.apvts, id, s);
+    s.setParamID (id);
     if (auto* param = proc.apvts.getParameter (id))
         s.setDoubleClickReturnValue (true, param->convertFrom0to1 (param->getDefaultValue()));
     k->label.setText (caption.toUpperCase(), juce::dontSendNotification);
@@ -229,6 +232,7 @@ K55Main::Choice& K55Main::makeChoice (const char* id, const juce::String& captio
     c->box.setJustificationType (juce::Justification::centredLeft);
     addAndMakeVisible (c->box);
     c->attachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (proc.apvts, id, c->box);
+    c->box.setParamID (id);
     c->label.setText (caption.toUpperCase(), juce::dontSendNotification);
     c->label.setJustificationType (juce::Justification::centred);
     c->label.setFont (K54Fonts::make (K54Fonts::syncopate(), 9.0f, 0.08f));
