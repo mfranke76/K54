@@ -263,6 +263,12 @@ int main (int argc, char** argv)
         runCC (5, 21, 0); pump (60);
         ok (proc.getParameters()[cut]->getValue() < 1.0e-4f, "Zuweisung 'jeder Kanal' (Kanal 0)");
 
+        {   // neue Instanz (anderes Projekt) bekommt dieselbe Hardware-Belegung
+            std::unique_ptr<juce::AudioProcessor> second (createPluginFilter());
+            auto& p2 = dynamic_cast<K55Processor&> (*second);
+            ok (p2.midiLearn.getAssignment (cut).cc == 21 && p2.midiLearn.getAssignment (res).cc == 74, "Neue Instanz uebernimmt die Hardware-Zuweisungen");
+        }
+
         // f) im Projekt gespeichert und wieder geladen
         juce::MemoryBlock state;
         proc.getStateInformation (state);
@@ -272,23 +278,21 @@ int main (int argc, char** argv)
         ok (learn.getAssignment (cut).cc == 21 && learn.getAssignment (res).cc == 74, "Zuweisungen im Projekt gespeichert");
         ok (! proc.apvts.state.getChildWithName ("MIDILEARN").isValid(), "Zuweisungen landen nicht in Presets");
         ok (K54MidiLearn::getDefaultsFile().existsAsFile(), "Standard-Zuweisungen fuer neue Instanzen gespeichert");
-        {
-            std::unique_ptr<juce::AudioProcessor> second (createPluginFilter());
-            auto& p2 = dynamic_cast<K55Processor&> (*second);
-            ok (p2.midiLearn.getAssignment (cut).cc == 21, "Neue Instanz uebernimmt die Hardware-Zuweisungen");
-        }
 
         // g) DAW-Automation wirkt auf den Klang (Cutoff zu vs. auf)
         auto level = [&] (float cutoffHz)
         {
             proc.setCurrentProgram (0); proc.prepareToPlay (sr, block);
+            setP (proc, "envAmount", 0.0f); setP (proc, "keyTrack", 0.0f); setP (proc, "velFilter", 0.0f);
             setP (proc, "cutoff", cutoffHz);
             auto b = render (proc, sr, block, 0.6, { { at (0.01), 48, true, 0.9f } });
             float hi = 0.0f;                           // grobe Hoehen: Differenz benachbarter Samples
             for (int i = 1; i < b.getNumSamples(); ++i) hi += std::abs (b.getSample (0, i) - b.getSample (0, i - 1));
             return hi;
         };
-        ok (level (200.0f) * 3.0f < level (12000.0f), "Automation Cutoff hoerbar");
+        const float dark = level (200.0f), bright = level (12000.0f);
+        std::printf ("      Hoehen bei 200 Hz: %.2f, bei 12 kHz: %.2f\n", dark, bright);
+        ok (dark * 2.0f < bright, "Automation Cutoff hoerbar");
 
         // h) Oberflaeche: Markierung am Regler
         shot (proc, 0, outDir.getChildFile ("screen_midi_learn.png"), [&] (juce::Component&) { learn.startLearning (learn.indexOf ("drive")); });

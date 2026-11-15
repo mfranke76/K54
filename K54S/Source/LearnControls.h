@@ -108,7 +108,7 @@ namespace K54Learn
                 g.setColour (K54Colours::gold);
                 g.drawRoundedRectangle (r.reduced (1.0f), 4.0f, 2.0f);
                 g.setFont (K54Fonts::make (K54Fonts::syncopateBold(), 8.0f, 0.06f));
-                g.drawText ("MIDI?", r.removeFromTop (11.0f), juce::Justification::centredRight);
+                g.drawText ("MIDI?", r.reduced (5.0f, 3.0f).removeFromTop (11.0f), juce::Justification::centredRight);
                 return;
             }
             const auto a = learn->getAssignment (idx);
@@ -152,7 +152,7 @@ class LearnButton : public juce::TextButton
 {
 public:
     LearnButton() { tag.owner = this; }
-    explicit LearnButton (const juce::String& text) : juce::TextButton (text) { tag.owner = this; }
+    explicit LearnButton (const juce::String& buttonText) : juce::TextButton (buttonText) { tag.owner = this; }
     void setParamID (const juce::String& id) { tag.paramID = id; }
     void mouseDown (const juce::MouseEvent& e) override { if (! tag.handleDown (e)) juce::TextButton::mouseDown (e); }
     void mouseDrag (const juce::MouseEvent& e) override { if (! tag.rightClick) juce::TextButton::mouseDrag (e); }
