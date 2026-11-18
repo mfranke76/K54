@@ -327,6 +327,169 @@ int main (int argc, char** argv)
         check (! proc->isMonitoringActive(), "Abhören zurückgestellt");
     }
 
+    // ---- 1.7: Abhör-Simulation ---------------------------------------------
+    std::cout << "Abhoer-Simulation" << std::endl;
+    {
+        const double fs = 48000.0;
+        const int blk = 512;
+        auto sineLevel = [&] (int dev, double freq, int seat = 1) -> float
+        {
+            DeviceSim ds; DeviceSim::Settings s; s.device = dev; s.seat = seat; s.noise = 0;
+            ds.setSettings (s); ds.prepare (fs);
+            std::vector<float> L (blk), R (blk);
+            double e = 0; int cnt = 0; double ph = 0;
+            for (int b = 0; b < 120; ++b)
+            {
+                for (int i = 0; i < blk; ++i) { L[(size_t) i] = R[(size_t) i] = 0.05f * (float) std::sin (ph); ph += 2.0 * juce::MathConstants<double>::pi * freq / fs; }
+                ds.process (L.data(), R.data(), blk);
+                if (b >= 60) for (int i = 0; i < blk; ++i) { e += L[(size_t) i] * L[(size_t) i]; ++cnt; }
+            }
+            return (float) (10.0 * std::log10 (e / cnt / (0.05 * 0.05 / 2.0) + 1.0e-20));
+        };
+
+        // Pegel-Angleich: rosa Rauschen, K-gewichtet gemessen, alle Geräte
+        int worst = -1; float worstDb = 0.0f; bool finite = true;
+        for (int d = 1; d < devsim::numModels(); ++d)
+        {
+            DeviceSim ds; DeviceSim::Settings s; s.device = d; s.noise = 0; s.seat = 1;
+            ds.setSettings (s); ds.prepare (fs);
+            LoudnessMeter in, out; in.prepare (fs); out.prepare (fs);
+            juce::Random r2 (7); float s1[8] {}, s2[8] {};
+            std::vector<float> L (blk), R (blk), iL (blk), iR (blk);
+            for (int b = 0; b < (int) (6.0 * fs / blk); ++b)
+            {
+                pinkish (r2, L.data(), blk, 0.05f, s1);
+                pinkish (r2, R.data(), blk, 0.05f, s2);
+                for (int i = 0; i < blk; ++i) R[(size_t) i] = 0.6f * L[(size_t) i] + 0.8f * R[(size_t) i];   // wie Musik: teils korreliert
+                iL = L; iR = R;
+                ds.process (L.data(), R.data(), blk);
+                for (int i = 0; i < blk; ++i) finite = finite && std::isfinite (L[(size_t) i]) && std::isfinite (R[(size_t) i]);
+                in.process (iL.data(), iR.data(), blk);
+                out.process (L.data(), R.data(), blk);
+            }
+            const float dd = out.integrated() - in.integrated();
+            if (std::abs (dd) > std::abs (worstDb)) { worstDb = dd; worst = d; }
+        }
+        check (finite, "Simulation: alle Geräte liefern gültige Werte");
+        check (std::abs (worstDb) < 1.5f, "Pegel-Angleich: größte Abweichung " + juce::String (worstDb, 2) + " LU ("
+               + juce::String::fromUTF8 (devsim::models()[(size_t) juce::jmax (0, worst)].name) + ")");
+
+        auto idx = [] (const char* name) { for (int i = 0; i < devsim::numModels(); ++i) if (juce::String::fromUTF8 (devsim::models()[(size_t) i].name) == juce::String::fromUTF8 (name)) return i; return -1; };
+        const int phone = idx ("Smartphone"), car = idx ("Auto Mittelklasse"), tel = idx ("Telefon"), bt = idx ("Bluetooth-Box"),
+                  radio = idx (u8"Küchenradio");
+        check (phone > 0 && car > 0 && tel > 0 && bt > 0 && radio > 0, "Geräteliste vollständig (" + juce::String (devsim::numModels() - 1) + u8s (" Geräte)"));
+
+        const float ph80 = sineLevel (phone, 80.0), ph1k = sineLevel (phone, 1000.0);
+        check (ph1k - ph80 > 30.0f, "Smartphone: 80 Hz " + juce::String (ph80 - ph1k, 1) + " dB unter 1 kHz");
+        const float c50 = sineLevel (car, 50.0), c1k = sineLevel (car, 1000.0);
+        check (c50 - c1k > 6.0f, "Auto: Kabinen-Bass 50 Hz " + juce::String (c50 - c1k, 1) + " dB über 1 kHz");
+        const float t8k = sineLevel (tel, 8000.0), t1k = sineLevel (tel, 1000.0);
+        check (t1k - t8k > 30.0f, "Telefon: 8 kHz " + juce::String (t8k - t1k, 1) + " dB unter 1 kHz");
+        const float r10k = sineLevel (radio, 10000.0), r1k = sineLevel (radio, 1000.0);
+        check (r1k - r10k > 12.0f, u8s ("Küchenradio: 10 kHz ") + juce::String (r10k - r1k, 1) + " dB unter 1 kHz");
+
+        // Mono beim Handy, Sitzplatz im Auto
+        {
+            DeviceSim ds; DeviceSim::Settings s; s.device = phone; s.noise = 0; ds.setSettings (s); ds.prepare (fs);
+            std::vector<float> L (blk), R (blk, 0.0f);
+            for (int b = 0; b < 20; ++b) { for (int i = 0; i < blk; ++i) L[(size_t) i] = 0.1f * (float) std::sin (0.13 * (b * blk + i)); std::fill (R.begin(), R.end(), 0.0f); ds.process (L.data(), R.data(), blk); }
+            float md = 0.0f; for (int i = 0; i < blk; ++i) md = juce::jmax (md, std::abs (L[(size_t) i] - R[(size_t) i]));
+            check (md < 1.0e-5f, "Smartphone: Mono (nur links hinein → beide Seiten gleich)");
+        }
+        {
+            DeviceSim ds; DeviceSim::Settings s; s.device = car; s.noise = 0; s.seat = 0; ds.setSettings (s); ds.prepare (fs);
+            std::vector<float> L (blk), R (blk);
+            double el = 0, er = 0;
+            juce::Random r3 (3); float s3[8] {};
+            for (int b = 0; b < 200; ++b)
+            {
+                pinkish (r3, L.data(), blk, 0.1f, s3);
+                R = L;
+                ds.process (L.data(), R.data(), blk);
+                if (b > 20) for (int i = 0; i < blk; ++i) { el += L[(size_t) i] * L[(size_t) i]; er += R[(size_t) i] * R[(size_t) i]; }
+            }
+            check (el > er * 1.5, "Auto Fahrersitz: linker Lautsprecher näher (" + juce::String (10.0 * std::log10 (el / er), 1) + " dB)");
+        }
+
+        // Fahrgeräusch in Stille
+        {
+            DeviceSim ds; DeviceSim::Settings s; s.device = car; s.noise = 2; ds.setSettings (s); ds.prepare (fs);
+            std::vector<float> L (blk), R (blk);
+            double e = 0; int cnt = 0;
+            for (int b = 0; b < 200; ++b)
+            {
+                std::fill (L.begin(), L.end(), 0.0f); std::fill (R.begin(), R.end(), 0.0f);
+                ds.process (L.data(), R.data(), blk);
+                if (b > 40) for (int i = 0; i < blk; ++i) { e += L[(size_t) i] * L[(size_t) i]; ++cnt; }
+            }
+            const float db = (float) (10.0 * std::log10 (e / cnt));
+            check (db > -26.0f && db < -18.0f, u8s ("Fahrgeräusch Autobahn: ") + juce::String (db, 1) + " dBFS RMS");
+        }
+
+        // Limiter der Bluetooth-Box
+        {
+            DeviceSim ds; DeviceSim::Settings s; s.device = bt; s.noise = 0; s.volume = 2; ds.setSettings (s); ds.prepare (fs);
+            std::vector<float> L (blk), R (blk);
+            for (int b = 0; b < 40; ++b)
+            {
+                for (int i = 0; i < blk; ++i) L[(size_t) i] = R[(size_t) i] = 0.8f * (float) std::sin (0.015 * (b * blk + i));
+                ds.process (L.data(), R.data(), blk);
+            }
+            check (ds.getLimiterDb() > 3.0f, "Bluetooth-Box laut: Limiter " + juce::String (ds.getLimiterDb(), 1) + " dB");
+        }
+
+        // Aus = Original bit-genau, Umschalten ohne Knacken
+        {
+            DeviceSim ds; DeviceSim::Settings s; s.device = car; s.on = false; ds.setSettings (s); ds.prepare (fs);
+            std::vector<float> L (blk), R (blk);
+            bool same = true;
+            for (int b = 0; b < 10; ++b)
+            {
+                for (int i = 0; i < blk; ++i) L[(size_t) i] = R[(size_t) i] = 0.3f * (float) std::sin (0.05 * (b * blk + i));
+                const auto c = L;
+                ds.process (L.data(), R.data(), blk);
+                same = same && L == c;
+            }
+            check (same, "Simulation aus: Ausgang = Original (bit-genau)");
+
+            double ph = 0; float maxStep = 0.0f, last = 0.0f; bool first = true;
+            const int seq[] { car, car, phone, phone, radio, radio, 0, 0, bt, bt };
+            for (int k = 0; k < 10; ++k)
+            {
+                s.device = seq[k]; s.on = (k != 3); ds.setSettings (s);
+                for (int b = 0; b < 8; ++b)
+                {
+                    for (int i = 0; i < blk; ++i) { L[(size_t) i] = R[(size_t) i] = 0.25f * (float) std::sin (ph); ph += 2.0 * juce::MathConstants<double>::pi * 110.0 / fs; }
+                    ds.process (L.data(), R.data(), blk);
+                    for (int i = 0; i < blk; ++i) { if (! first) maxStep = juce::jmax (maxStep, std::abs (L[(size_t) i] - last)); last = L[(size_t) i]; first = false; }
+                }
+            }
+            check (maxStep < 0.08f, "Gerätewechsel ohne Knacken (größter Sprung " + juce::String (maxStep, 3) + ")");
+        }
+
+        // Im Plugin: wirkt aufs Abhören, Warnung an, Messung unverändert
+        {
+            setParam (*proc, "device", (float) car);
+            setParam (*proc, "devOn", 1.0f);
+            setParam (*proc, "devNoise", 0.0f);
+            check (proc->isDeviceActive() && proc->isMonitoringActive(), "Plugin: Simulation aktiv, orange Warnung");
+            juce::AudioBuffer<float> b (2, 512);
+            juce::MidiBuffer m;
+            float outDiff = 0.0f;
+            for (int k = 0; k < 20; ++k)
+            {
+                for (int i = 0; i < 512; ++i) { const float v = 0.3f * (float) std::sin (0.02 * (k * 512 + i)); b.setSample (0, i, v); b.setSample (1, i, v); }
+                juce::AudioBuffer<float> c; c.makeCopyOf (b);
+                setParam (*proc, "ab", 0.0f);
+                proc->processBlock (b, m);
+                for (int i = 0; i < 512; ++i) outDiff = juce::jmax (outDiff, std::abs (b.getSample (0, i) - c.getSample (0, i)));
+            }
+            check (outDiff > 0.01f, "Plugin: Ausgang klingt wie das Gerät");
+            setParam (*proc, "devOn", 0.0f);
+            check (! proc->isMonitoringActive(), "Plugin: Simulation aus, keine Warnung");
+        }
+    }
+
     // ---- 1.2: Live-Referenz über Sidechain ---------------------------------
     {
         auto lp = std::make_unique<AnalyzerProcessor>();
@@ -579,6 +742,27 @@ int main (int argc, char** argv)
         const auto report = c.buildReport();
         check (report.contains ("Integrated") && report.contains ("TONALE BALANCE"), "Messbericht enthält Lautheit und Tonale Balance");
         outDir.getChildFile ("Bericht.txt").replaceWithText (report);
+
+        // ---- 1.7: Abhör-Simulation ----------------------------------------
+        {
+            int carIdx = 0;
+            for (int i = 0; i < devsim::numModels(); ++i)
+                if (juce::String::fromUTF8 (devsim::models()[(size_t) i].name) == "Auto Mittelklasse") carIdx = i;
+            setParam (*proc, "device", (float) carIdx);
+            setParam (*proc, "devOn", 1.0f);
+            setParam (*proc, "devNoise", 1.0f);
+            for (int t = 0; t < 20; ++t) { runAudio (*proc, 1.0 / 30.0, 0.5f, rnd, st); editor->runTick(); }
+            snap ("screen_geraet_knopf.png");
+            c.showDevices (true);
+            for (int t = 0; t < 10; ++t) { runAudio (*proc, 1.0 / 30.0, 0.5f, rnd, st); editor->runTick(); }
+            snap ("screen_abhoeren.png");
+            setParam (*proc, "device", 3.0f);
+            for (int t = 0; t < 10; ++t) { runAudio (*proc, 1.0 / 30.0, 0.5f, rnd, st); editor->runTick(); }
+            snap ("screen_abhoeren_handy.png");
+            c.showDevices (false);
+            setParam (*proc, "device", 0.0f);
+            setParam (*proc, "devNoise", 0.0f);
+        }
 
         c.showHelp (true);
         snap ("screen_help.png");

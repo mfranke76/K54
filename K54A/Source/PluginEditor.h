@@ -6,6 +6,7 @@
 #include "PluginProcessor.h"
 #include "Spectrum.h"
 #include "ViewStyle.h"
+#include "DevicePanel.h"
 
 namespace k54a
 {
@@ -273,6 +274,7 @@ public:
     juce::String buildReport() const;
     void applyStyle (const ViewStyle&, bool save);
     void showView (bool s);
+    void showDevices (bool s);
     void refreshQuickPresets();
     juce::Colour accent (juce::Colour def) const;
     const ViewStyle& getStyle() const noexcept { return style; }
@@ -300,6 +302,8 @@ private:
     WaveView wave { proc };
     HelpOverlay help;
     ViewPanel viewPanel;
+    DeviceButton btnDevice { proc };
+    DevicePanel devicePanel { proc };
     ViewStyle style;
 
     juce::TextButton btnQCurve, btnQBars, btnQSpectro, btnQColor;

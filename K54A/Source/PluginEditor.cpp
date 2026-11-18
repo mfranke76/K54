@@ -1896,6 +1896,10 @@ void HelpOverlay::paint (juce::Graphics& g)
     add ("Slot LIVE misst, was am Sidechain-Eingang ankommt – eine andere Spur, ein externer Player oder eine App über "
          "ein virtuelles Audiogerät. Alles läuft wie bei einer Datei (A/B, Angleich, Tonale Balance), es wird nichts aufgenommen.\n\n",
          13.5f, col::text);
+    add ("Abhör-Simulation  ", 13.5f, col::goldHi, true);
+    add ("Knopf oben neben B: Mix und Referenz so hören wie auf Smartphone, Laptop, Ohrhörern, Bluetooth-Box, Fernseher, "
+         "Küchenradio, im Auto (mit Sitzplatz und Fahrgeräusch) oder im Club. Mit Lautstärke am Gerät (Limiter, Zerre), "
+         "Umgebungsgeräusch und Pegel-Angleich. Kreis rechts im Knopf = an/aus. Die Messwerte bleiben unverändert.\n\n", 13.5f, col::text);
     add ("Abhören (PRO)  ", 13.5f, col::goldHi, true);
     add ("Mono, Side oder ein Frequenzbereich solo – für Mix und Referenz. Ist etwas davon aktiv, leuchtet es orange: "
          "vor dem Bouncen wieder auf Stereo / Voller Bereich stellen!\n\n", 13.5f, col::text);
@@ -1959,7 +1963,7 @@ Content::Content (AnalyzerProcessor& p) : proc (p)
     btnB.onClick = [this] { setAB (true); };
 
     // Kopf rechts
-    setupLabel (lbTarget, "ZIEL");
+    setupLabel (lbTarget, "ZIEL", juce::Justification::centredLeft);
     setupCombo (cbTarget, "target", aTarget);
     btnReport.setButtonText ("BERICHT");
     btnReport.setTooltip (u8s ("Messbericht (Lautheit, True Peak, Tonale Balance) als Textdatei speichern"));
@@ -2073,6 +2077,15 @@ Content::Content (AnalyzerProcessor& p) : proc (p)
     viewPanel.setSettings (&proc.getSettings());
     addChildComponent (viewPanel);
 
+    // Abhör-Simulation
+    btnDevice.setTooltip (u8s ("Abhör-Simulation: Mix und Referenz wie auf Handy, Ohrhörern, Küchenradio, im Auto … hören. "
+                               "Klick = Gerät wählen, Kreis rechts = an/aus"));
+    btnDevice.onOpen = [this] { showDevices (true); };
+    btnDevice.onToggle = [this] (bool on) { setParam ("devOn", on ? 1.0f : 0.0f); btnDevice.refresh(); };
+    addAndMakeVisible (btnDevice);
+    devicePanel.setParam = [this] (const char* id, float v) { setParam (id, v); devicePanel.refresh(); btnDevice.refresh(); };
+    addChildComponent (devicePanel);
+
     // Schnellumschalter im Spektrum-Feld
     auto quick = [this] (juce::TextButton& b, const char* text, const char* tip, std::function<void (ViewStyle&)> fn)
     {
@@ -2173,6 +2186,17 @@ void Content::refreshQuickPresets()
     cbQuickPreset.addSeparator();
     cbQuickPreset.addItem (u8s ("Einstellen …"), 999);
     cbQuickPreset.setSelectedId (match, juce::dontSendNotification);
+}
+
+void Content::showDevices (bool s)
+{
+    if (s) devicePanel.refresh();
+    devicePanel.setVisible (s);
+    if (s)
+    {
+        devicePanel.toFront (true);
+        devicePanel.grabKeyboardFocus();
+    }
 }
 
 void Content::showView (bool s)
@@ -2374,10 +2398,11 @@ void Content::resized()
     btnSimple.setBounds (258, 17, 76, 26);
     btnView.setBounds (396, 17, 64, 26);
     btnPro.setBounds (338, 17, 52, 26);
-    btnA.setBounds (466, 11, 170, 36);
-    btnB.setBounds (642, 11, 200, 36);
-    lbTarget.setBounds (850, 15, 46, 28);
-    cbTarget.setBounds (900, 15, 196, 28);
+    btnA.setBounds (466, 11, 132, 36);
+    btnB.setBounds (602, 11, 156, 36);
+    btnDevice.setBounds (766, 11, 182, 36);
+    lbTarget.setBounds (954, 0, 40, 14);
+    cbTarget.setBounds (954, 15, 142, 28);
     btnReport.setBounds (1102, 15, 74, 28);
     btnReset.setBounds (1182, 15, 56, 28);
     btnHelp.setBounds (1242, 15, 26, 28);
@@ -2438,6 +2463,7 @@ void Content::resized()
 
     help.setBounds (getLocalBounds());
     viewPanel.setBounds (getLocalBounds());
+    devicePanel.setBounds (getLocalBounds());
 }
 
 void Content::panel (juce::Graphics& g, juce::Rectangle<int> r, const juce::String& title, juce::Colour accent) const
@@ -2528,10 +2554,11 @@ void Content::paint (juce::Graphics& g)
         if (mon == 1) parts.add ("MONO");
         if (mon == 2) parts.add ("SIDE");
         if (band > 0) parts.add (proc.apvts.getParameter ("band")->getCurrentValueAsText().toUpperCase());
+        if (proc.isDeviceActive()) parts.add (u8s ("GERÄTE-SIMULATION"));
         g.setColour (col::warn);
         g.setFont (font (10.5f, true));
         g.drawText (u8s ("ABHÖREN: ") + parts.joinIntoString (u8s (" · ")) + u8s (" – vor dem Bouncen zurückstellen"),
-                    466, 47, 376, 11, juce::Justification::centred);
+                    466, 47, 482, 11, juce::Justification::centred);
     }
 
     panel (g, rSpec, u8s ("SPEKTRUM"), accent (juce::Colour (0xffffb03a)));
@@ -2565,6 +2592,9 @@ void Content::paint (juce::Graphics& g)
 void Content::tick()
 {
     auto& vts = proc.apvts;
+    btnDevice.refresh();
+    if (devicePanel.isVisible() && (tickCount % 3) == 0)
+        devicePanel.refresh();
     double s = proc.getSampleRate();
     if (s <= 0.0) s = 48000.0;
 
@@ -2740,7 +2770,7 @@ void Content::tick()
     if (scope.isVisible()) scope.repaint();
     wave.repaint();
     repaint (rRef.withTrimmedLeft (904 - rRef.getX()));
-    repaint (rHeader.withTrimmedLeft (460).withWidth (390));
+    repaint (rHeader.withTrimmedLeft (460).withWidth (490));
 }
 
 //==============================================================================

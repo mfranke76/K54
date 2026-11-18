@@ -10,6 +10,7 @@
 #include <vector>
 #include "Loudness.h"
 #include "Spectrum.h"
+#include "DeviceSim.h"
 
 namespace k54a
 {
@@ -196,6 +197,9 @@ public:
     float getRefGainDb() const noexcept;   // Gain + Angleich, so wie die Referenz klingt
     bool isHostPlaying() const noexcept { return hostPlaying.load(); }
     bool isMonitoringActive() const noexcept;
+    bool isDeviceActive() const noexcept;
+    DeviceSim::Settings getDeviceSettings() const noexcept;
+    const DeviceSim& getDeviceSim() const noexcept { return deviceSim; }
 
     void resetMeasurements() { resetRequested.store (true); }
     int getResetCount() const noexcept { return resetCount.load(); }
@@ -223,6 +227,7 @@ private:
     void processChunk (float* L, float* R, bool stereo, int n, bool playing, int64_t dawPos,
                        const float* scL, const float* scR);
     void applyMonitoring (float* L, float* R, bool stereo, int n);
+    void applyBand (float* L, float* R, bool stereo, int n, int band);
     void setStatus (int s, const juce::String& msg);
     void trashRef (RefData* r);
 
@@ -256,6 +261,14 @@ private:
     std::atomic<float>* pSlot = nullptr;
     std::atomic<float>* pMonitor = nullptr;
     std::atomic<float>* pBand = nullptr;
+    std::atomic<float>* pDevice = nullptr;
+    std::atomic<float>* pDevOn = nullptr;
+    std::atomic<float>* pDevVol = nullptr;
+    std::atomic<float>* pDevNoise = nullptr;
+    std::atomic<float>* pDevSeat = nullptr;
+    std::atomic<float>* pDevMatch = nullptr;
+    DeviceSim deviceSim;
+    std::vector<float> monoTmp;
 
     LoudnessMeter mixMeter, refMeter;
     juce::LinearSmoothedValue<float> refGain;

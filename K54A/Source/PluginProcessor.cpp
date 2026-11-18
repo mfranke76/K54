@@ -116,6 +116,20 @@ juce::AudioProcessorValueTreeState::ParameterLayout AnalyzerProcessor::createLay
                                                                  u8 ("Mitten 150 Hz – 5 kHz"), u8 ("Höhen > 5 kHz") }, 0));
     l.add (std::make_unique<AudioParameterChoice> (ParameterID { "refSlot", 2 }, "Referenz-Slot",
                                                    StringArray { "1", "2", "3", "4", "Live (Sidechain)" }, 0));
+    // ab 1.7: Abhör-Simulation
+    {
+        StringArray names;
+        for (auto& m : devsim::models()) names.add (u8 (m.name));
+        l.add (std::make_unique<AudioParameterChoice> (ParameterID { "device", 3 }, u8 ("Abhör-Gerät"), names, 0));
+    }
+    l.add (std::make_unique<AudioParameterBool> (ParameterID { "devOn", 3 }, "Simulation an", true));
+    l.add (std::make_unique<AudioParameterChoice> (ParameterID { "devVol", 3 }, u8 ("Lautstärke am Gerät"),
+                                                   StringArray { "Leise", "Normal", "Laut" }, 1));
+    l.add (std::make_unique<AudioParameterChoice> (ParameterID { "devNoise", 3 }, u8 ("Umgebungsgeräusch"),
+                                                   StringArray { "Aus", "Leise", "Laut" }, 0));
+    l.add (std::make_unique<AudioParameterChoice> (ParameterID { "devSeat", 3 }, "Sitzplatz Auto",
+                                                   StringArray { "Fahrer", "Mitte", "Beifahrer" }, 0));
+    l.add (std::make_unique<AudioParameterBool> (ParameterID { "devMatch", 3 }, "Simulation Pegel angleichen", true));
     return l;
 }
 
@@ -136,6 +150,12 @@ AnalyzerProcessor::AnalyzerProcessor()
     pSlot      = apvts.getRawParameterValue ("refSlot");
     pMonitor   = apvts.getRawParameterValue ("monitor");
     pBand      = apvts.getRawParameterValue ("band");
+    pDevice    = apvts.getRawParameterValue ("device");
+    pDevOn     = apvts.getRawParameterValue ("devOn");
+    pDevVol    = apvts.getRawParameterValue ("devVol");
+    pDevNoise  = apvts.getRawParameterValue ("devNoise");
+    pDevSeat   = apvts.getRawParameterValue ("devSeat");
+    pDevMatch  = apvts.getRawParameterValue ("devMatch");
 
     for (int s = 0; s < numSlots; ++s)
     {
@@ -208,7 +228,24 @@ float AnalyzerProcessor::getRefGainDb() const noexcept
 
 bool AnalyzerProcessor::isMonitoringActive() const noexcept
 {
-    return pMonitor->load() > 0.5f || pBand->load() > 0.5f;
+    return pMonitor->load() > 0.5f || pBand->load() > 0.5f || isDeviceActive();
+}
+
+bool AnalyzerProcessor::isDeviceActive() const noexcept
+{
+    return pDevOn->load() > 0.5f && pDevice->load() > 0.5f;
+}
+
+DeviceSim::Settings AnalyzerProcessor::getDeviceSettings() const noexcept
+{
+    DeviceSim::Settings s;
+    s.device = (int) std::lround (pDevice->load());
+    s.on     = pDevOn->load() > 0.5f;
+    s.volume = (int) std::lround (pDevVol->load());
+    s.noise  = (int) std::lround (pDevNoise->load());
+    s.seat   = (int) std::lround (pDevSeat->load());
+    s.match  = pDevMatch->load() > 0.5f;
+    return s;
 }
 
 bool AnalyzerProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
@@ -250,6 +287,10 @@ void AnalyzerProcessor::prepareToPlay (double sampleRate, int)
     lpMid.setType (LR::lowpass);    lpMid.setCutoffFrequency (5000.0f);
     hpHigh.setType (LR::highpass);  hpHigh.setCutoffFrequency (5000.0f);
     for (auto* f : { &lpBass, &hpMid, &lpMid, &hpHigh }) f->prepare (spec);
+
+    deviceSim.setSettings (getDeviceSettings());
+    deviceSim.prepare (sr);
+    monoTmp.assign (scratchSize, 0.0f);
 
     for (int s = 0; s < numSlots; ++s)
     {
@@ -552,9 +593,23 @@ void AnalyzerProcessor::applyMonitoring (float* L, float* R, bool stereo, int n)
         }
     }
 
-    if (band <= 0)
-        return;
+    if (band > 0)
+        applyBand (L, R, stereo, n, band);
 
+    // Abhör-Simulation (Gerät) – wirkt nur auf das Abhören, Messungen bleiben unverändert
+    deviceSim.setSettings (getDeviceSettings());
+    if (stereo)
+        deviceSim.process (L, R, n);
+    else if ((int) monoTmp.size() >= n)
+    {
+        std::copy (L, L + n, monoTmp.data());
+        deviceSim.process (L, monoTmp.data(), n);
+        for (int i = 0; i < n; ++i) L[i] = 0.5f * (L[i] + monoTmp[(size_t) i]);
+    }
+}
+
+void AnalyzerProcessor::applyBand (float* L, float* R, bool stereo, int n, int band)
+{
     const int chans = stereo ? 2 : 1;
     for (int ch = 0; ch < chans; ++ch)
     {
