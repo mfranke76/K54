@@ -1,4 +1,7 @@
-K-54 Analyzer 1.7.0 · Keller54 · by Frank E. – BETA
+K-54 Analyzer 1.7.1 · Keller54 · by Frank E. – BETA
+
+Neu in 1.7.1:
+- Behoben: Bildzucken und durchsichtige Streifen im Fenster (z. B. in Logic auf dem Mac)
 
 Neu in 1.7.0 – Abhör-Simulation:
 - Mix und Referenz so hören wie auf 19 Geräten: Smartphone (hochkant und quer), Tablet, Laptop, Telefon, Ohrhörer, True-Wireless, Kopfhörer bassbetont, Bluetooth-Box, Smart-Speaker, Fernseher, Küchenradio, HiFi im Wohnzimmer, drei Autos (Kleinwagen, Mittelklasse, mit Subwoofer), Club/PA, kleine Monitore und Mittenwürfel

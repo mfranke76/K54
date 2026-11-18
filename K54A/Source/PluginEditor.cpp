@@ -2769,8 +2769,9 @@ void Content::tick()
     if (history.isVisible()) history.repaint();
     if (scope.isVisible()) scope.repaint();
     wave.repaint();
-    repaint (rRef.withTrimmedLeft (904 - rRef.getX()));
-    repaint (rHeader.withTrimmedLeft (460).withWidth (490));
+    // ganzes Fenster neu zeichnen: macOS (Metal-Puffer) zeigt sonst in nicht neu gezeichneten
+    // Bereichen alte oder durchsichtige Bildteile – sichtbar als Zucken/Streifen (z. B. in Logic)
+    repaint();
 }
 
 //==============================================================================
@@ -2778,6 +2779,8 @@ AnalyzerEditor::AnalyzerEditor (AnalyzerProcessor& p)
     : AudioProcessorEditor (p), proc (p), content (p)
 {
     setLookAndFeel (&look);
+    setOpaque (true);
+    content.setOpaque (true);
     addAndMakeVisible (content);
 
     setResizable (true, true);
